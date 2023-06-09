@@ -24,7 +24,7 @@ def default_config():
     _C.MODEL.BACKBONE.URL = str()
 
     _C.MODEL.BIFPN = OmegaConf.create()
-    _C.MODEL.TYPE = 'BS'
+    _C.MODEL.BIFPN.TYPE = str()
     _C.MODEL.BIFPN.NAME = str()
     _C.MODEL.BIFPN.NUM_CHANNELS = int()
     _C.MODEL.BIFPN.NUM_LAYERS = int()
@@ -38,9 +38,6 @@ def default_config():
     _C.DATASET.VAL_SET = str()
     _C.DATASET.MEAN = list()
     _C.DATASET.STD = list()
-    
-    _C.DATASET.ANCHORS_SCALES = str()
-    _C.DATASET.ANCHORS_RATIOS = str()
     
     _C.DATASET.OBJ_LIST = list()
     
@@ -64,6 +61,9 @@ def create_config(args):
     def_config = default_config()
 
     base_config = OmegaConf.merge(def_config, model_conf, dataset_conf)
+    
+    if hasattr(args, 'fpn_type') and args.fpn_type:
+        base_config.MODEL.BIFPN.TYPE = args.fpn_type
     
     if hasattr(args, 'lr') and args.lr:
         base_config.TRAIN.BASE_LR = args.lr
