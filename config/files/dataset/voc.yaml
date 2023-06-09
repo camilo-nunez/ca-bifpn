@@ -1,0 +1,7 @@
+DATASET:
+    NAME: 'voc2012'
+    TRAIN_SET: 'train'
+    VAL_SET: 'val'
+    MEAN: [0.485, 0.456, 0.406]
+    STD: [0.229, 0.224, 0.225]
+    OBJ_LIST: ['background','aeroplane',"Bicycle",'bird',"Boat","Bottle","Bus","Car","Cat","Chair",'cow',"Diningtable","Dog","Horse","Motorbike",'person', "Pottedplant",'sheep',"Sofa","Train","TVmonitor"]

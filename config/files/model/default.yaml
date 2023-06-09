@@ -1,0 +1,21 @@
+MODEL:
+    BACKBONE:
+        NAME: 'internimage_l_22k_192to384'
+        CHANNELS: 64
+        DEPTHS: [4, 4, 18, 4]
+        GROUPS: [4, 8, 16, 32]
+        MLP_RATIO: 4.0
+        OFFSET_SCALE: 1.0
+        NUM_CLASSES: 0
+        POST_NORM: False
+        DROP_PATH_RATE: 0.2
+        LAYER_SCALE: 1.0
+        WITH_CP: False
+        IN_CHANNELS: [64, 128, 256, 512]
+        IMAGE_SIZE: 384
+        URL: 'https://huggingface.co/OpenGVLab/InternImage/resolve/main/internimage_t_1k_224.pth'
+    BIFPN:
+        TYPE: 'CA'
+        NAME: 'bifpn_5l'
+        NUM_CHANNELS: 160
+        NUM_LAYERS: 5
