@@ -1,6 +1,6 @@
 MODEL:
     BACKBONE:
-        NAME: 'internimage_l_22k_192to384'
+        NAME: 'internimage_t_1k_224'
         CHANNELS: 64
         DEPTHS: [4, 4, 18, 4]
         GROUPS: [4, 8, 16, 32]
@@ -12,10 +12,9 @@ MODEL:
         LAYER_SCALE: 1.0
         WITH_CP: False
         IN_CHANNELS: [64, 128, 256, 512]
-        IMAGE_SIZE: 384
+        IMAGE_SIZE: 224
         URL: 'https://huggingface.co/OpenGVLab/InternImage/resolve/main/internimage_t_1k_224.pth'
     BIFPN:
-        TYPE: 'CA'
-        NAME: 'cabifpn_5l'
-        NUM_CHANNELS: 160
+        NAME: 'fpn_5l'
+        NUM_CHANNELS: 112
         NUM_LAYERS: 5
