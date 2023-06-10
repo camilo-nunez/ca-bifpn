@@ -8,7 +8,7 @@ class LocalContextAggregator(nn.Module):
     
     def __init__(self,
                  channels,
-                 r = 4,
+                 r = 2,
                 ):
         super().__init__()
         inter_channels = int(channels // r)
@@ -31,7 +31,7 @@ class GlobalContextAggregator(nn.Module):
     
     def __init__(self,
                  channels,
-                 r = 4,
+                 r = 2,
                 ):
         super().__init__()
         inter_channels = int(channels // r)
@@ -60,17 +60,19 @@ class FMBConvCA(nn.Module):
         super().__init__()
         
         self.conv = nn.Sequential(nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels, bias=False),
-                                  nn.InstanceNorm2d(channels, affine=True),
                                   nn.GELU(),
                                   LocalContextAggregator(channels) if ca_local else GlobalContextAggregator(channels),
                                   nn.Conv2d(channels, channels, kernel_size=1, stride=1, padding=0, bias=False),
-                                  nn.InstanceNorm2d(channels, affine=True),
                                  )
-                
+
+        self.norm1 = nn.InstanceNorm2d(channels, affine=True)
+        self.norm2 = nn.InstanceNorm2d(channels, affine=True)
+        
     def forward(self, x):
+        x = self.norm1(x)
         x_hat = self.conv(x)
         
-        return x + x_hat
+        return self.norm2(x + x_hat)
 
 ## CA + BiFPN
 class CABiFPN(nn.Module):

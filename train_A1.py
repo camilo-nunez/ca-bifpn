@@ -194,7 +194,7 @@ if __name__ == '__main__':
         start_epoch = checkpoint['epoch'] + 1
         print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
         
-    if args.dont_do_it: print('chao !'); exit();
+    
     
     # Train the model
     base_model.train()
@@ -224,9 +224,11 @@ if __name__ == '__main__':
 
                 tepoch.set_description('Epoch: {}/{}. lr: {:1.8f} loss_classifier: {:1.8f} - loss_box_reg: {:1.8f}'\
                                        ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
-                                       ' - total loss: {:1.8f} - median loss: {:1.8f}'\ 
+                                       ' - total loss: {:1.8f} - median loss: {:1.8f}'\
                                        .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
 #                 lr_scheduler.step()
+                
+                if args.dont_do_it: print('chao !'); exit();
 
         if loss_median < best_loss:
             best_loss = loss_median
