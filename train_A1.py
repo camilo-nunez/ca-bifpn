@@ -57,6 +57,10 @@ def parse_option():
                         type=str,
                         default='adamw', 
                         help='Select optimizer for training, suggest using \'admaw\' until the very final stage then switch to \'sgd\'.')
+    
+    parser.add_argument('--use_scheduler',
+                        action='store_true',
+                        help="Use the scheduler \'CyclicLR\', with \'triangular\' mode.")
 
     parser.add_argument('--num_epochs',
                         type=int,
@@ -155,11 +159,11 @@ if __name__ == '__main__':
                        'num_workers': 8,
                        'pin_memory':True,
                       }
-    train_dataset = dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
+    train_dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
     training_generator = torch.utils.data.DataLoader(train_dataset, **training_params)
     print('[++] Ready !')
     
-    print('[++] Ready !')
+    print('[+] Ready !')
     
     # General train variables
     ## Cofig the optimizer
@@ -173,8 +177,9 @@ if __name__ == '__main__':
         print('[+] Using SGD optimizer')
         
     ## Learning rate scheduler
-#     lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=5e-4, max_lr=1e-2, step_size_up=8000, mode="triangular", cycle_momentum=False,)
-#     lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=2500, mode="triangular", cycle_momentum=False,)
+    if args.use_scheduler:
+        lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=2500, mode="triangular", cycle_momentum=False,)
+        print('[+] Using CyclicLR scheduler')
 
     start_epoch = 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS
@@ -188,16 +193,19 @@ if __name__ == '__main__':
         
         base_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-#         lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
-    
+        if args.use_scheduler and checkpoint['lr_scheduler_state_dict']!=None:
+            lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+
         best_loss = checkpoint['best_loss']
         start_epoch = checkpoint['epoch'] + 1
         print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
-        
-    
-    
+
     # Train the model
     base_model.train()
+    
+    print('[+] Starting training ...')
+    start_t = datetime.now()
+    
     for epoch in range(start_epoch, end_epoch + 1):
         loss_l = []
         with tqdm(training_generator, unit=" batch") as tepoch:
@@ -226,7 +234,8 @@ if __name__ == '__main__':
                                        ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
                                        ' - total loss: {:1.8f} - median loss: {:1.8f}'\
                                        .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
-#                 lr_scheduler.step()
+                if args.use_scheduler:
+                    lr_scheduler.step()
                 
                 if args.dont_do_it: print('chao !'); exit();
 
@@ -235,8 +244,14 @@ if __name__ == '__main__':
 
             torch.save({'model_state_dict': base_model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-#                         'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+                        'lr_scheduler_state_dict': lr_scheduler.state_dict() if args.use_scheduler else None,
                         'epoch': epoch,
                         'best_loss': best_loss,
+                        'fn_cfg_dataset': str(args.cfg_dataset), 
+                        'fn_cfg_model': str(args.cfg_model),
+                        'fpn_type': base_config.MODEL.BIFPN.TYPE,
                        },
                        os.path.join(CHECK_PATH, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
+    
+    end_t = datetime.now()
+    print('[+] Ready, the train phase took:', (end_t - start_t))
