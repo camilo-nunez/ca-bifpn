@@ -15,7 +15,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 from model.builder_backbone import Backbone
-from config.basic import create_config
+from config.basic import create_train_config
 from utils.datasets import VOCDetectionV2
 
 ## Customs configs
@@ -46,7 +46,6 @@ def parse_option():
                         required=True,
                         help='Select the FPN backbone, this should be \'bs\' (refer to baseline) or \'ca\' (refer to context agregation).')
                         
-
     parser.add_argument('--lr', 
                         type=float, 
                         default=1e-4,
@@ -60,8 +59,24 @@ def parse_option():
     
     parser.add_argument('--use_scheduler',
                         action='store_true',
-                        help="Use the scheduler \'CyclicLR\', with \'triangular\' mode.")
-
+                        help="Use the scheduler \'CyclicLR\'.")
+    parser.add_argument('--scheduler_base_lr',
+                        type=float, 
+                        default=1e-4,
+                        help="\'base_lr\' for the \'CyclicLR\' scheduler.")
+    parser.add_argument('--scheduler_max_lr',
+                        type=float, 
+                        default=2e-3,
+                        help="\'max_lr\' for the \'CyclicLR\' scheduler.")
+    parser.add_argument('--scheduler_step_size_up',
+                        type=int, 
+                        default=5000,
+                        help="\'step_size_up\' for the \'CyclicLR\' scheduler.")
+    parser.add_argument('--scheduler_mode',
+                        type=str, 
+                        default="triangular",
+                        help="\'mode\' for the \'CyclicLR\' scheduler.")
+    
     parser.add_argument('--num_epochs',
                         type=int,
                         default=40)
@@ -86,13 +101,9 @@ def parse_option():
     parser.add_argument('--batch_size',
                         type=int,
                         default=2)
-    
-    parser.add_argument('--dont_do_it',
-                        action='store_true',
-                        help='Dont use this arg !')
         
     args, unparsed = parser.parse_known_args()
-    config = create_config(args)
+    config = create_train_config(args)
 
     return args, config
 
@@ -100,7 +111,7 @@ if __name__ == '__main__':
                         
     # Load configs for the model and the dataset
     args, base_config = parse_option()
-    
+
     # Check the principal exceptions
     if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
     if base_config.DATASET.NAME!='voc2012': raise Exception('This script only work with the dataset VOC2012.')
@@ -177,9 +188,15 @@ if __name__ == '__main__':
         print('[+] Using SGD optimizer')
         
     ## Learning rate scheduler
-    if args.use_scheduler:
-        lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-4, max_lr=1e-2, step_size_up=2500, mode="triangular", cycle_momentum=False,)
+    if base_config.TRAIN.SCHEDULER.USE:
+        lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer,
+                                                         base_lr=base_config.TRAIN.SCHEDULER.BASE_LR,
+                                                         max_lr=base_config.TRAIN.SCHEDULER.MAX_LR, 
+                                                         step_size_up=base_config.TRAIN.SCHEDULER.STEP_SIZE_UP, 
+                                                         mode=base_config.TRAIN.SCHEDULER.MODE, 
+                                                         cycle_momentum=False,)
         print('[+] Using CyclicLR scheduler')
+        print(f'[++] Scheduler configs: {base_config.TRAIN.SCHEDULER}')
 
     start_epoch = 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS
@@ -236,8 +253,6 @@ if __name__ == '__main__':
                                        .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
                 if args.use_scheduler:
                     lr_scheduler.step()
-                
-                if args.dont_do_it: print('chao !'); exit();
 
         if loss_median < best_loss:
             best_loss = loss_median

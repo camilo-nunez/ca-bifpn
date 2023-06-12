@@ -52,9 +52,18 @@ def default_config():
     _C.TRAIN.CHECKPOINT_PATH = str()
     _C.TRAIN.BATCH_SIZE = int()
     
+    ### Scheduler options
+    _C.TRAIN.SCHEDULER = OmegaConf.create()
+    _C.TRAIN.SCHEDULER.USE = False
+    _C.TRAIN.SCHEDULER.BASE_LR = float()
+    _C.TRAIN.SCHEDULER.MAX_LR = float()
+    _C.TRAIN.SCHEDULER.STEP_SIZE_UP = int()
+    _C.TRAIN.SCHEDULER.MODE = str()
+    
+    
     return _C
 
-def create_config(args):
+def create_train_config(args):
     
     model_conf = OmegaConf.load(args.cfg_model)
     dataset_conf = OmegaConf.load(args.cfg_dataset)
@@ -84,5 +93,12 @@ def create_config(args):
         if hasattr(args, 'path_checkpoint') and args.path_checkpoint:
             base_config.TRAIN.CHECKPOINT_PATH = args.path_checkpoint
         else: raise RuntimeError('You must specify the \'--path_checkpoint\'. ')
-      
+
+    if hasattr(args, 'use_scheduler') and args.use_scheduler:
+        base_config.TRAIN.SCHEDULER.USE = args.use_scheduler
+        base_config.TRAIN.SCHEDULER.BASE_LR = args.scheduler_base_lr
+        base_config.TRAIN.SCHEDULER.MAX_LR = args.scheduler_max_lr
+        base_config.TRAIN.SCHEDULER.STEP_SIZE_UP= args.scheduler_step_size_up
+        base_config.TRAIN.SCHEDULER.MODE = args.scheduler_mode
+
     return base_config
