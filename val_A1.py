@@ -150,4 +150,3 @@ if __name__ == '__main__':
     evaluateCOCO(base_model, data_loader_val, device=device)
     end_t = datetime.now()
     print('[+] Ready, the validation phase took:', (end_t - start_t))
-    

@@ -57,29 +57,9 @@ def parse_option():
                         default='adamw', 
                         help='Select optimizer for training, suggest using \'admaw\' until the very final stage then switch to \'sgd\'.')
     
-    parser.add_argument('--use_scheduler',
-                        action='store_true',
-                        help="Use the scheduler \'CyclicLR\'.")
-    parser.add_argument('--scheduler_base_lr',
-                        type=float, 
-                        default=1e-4,
-                        help="\'base_lr\' for the \'CyclicLR\' scheduler.")
-    parser.add_argument('--scheduler_max_lr',
-                        type=float, 
-                        default=2e-3,
-                        help="\'max_lr\' for the \'CyclicLR\' scheduler.")
-    parser.add_argument('--scheduler_step_size_up',
-                        type=int, 
-                        default=5000,
-                        help="\'step_size_up\' for the \'CyclicLR\' scheduler.")
-    parser.add_argument('--scheduler_mode',
-                        type=str, 
-                        default="triangular",
-                        help="\'mode\' for the \'CyclicLR\' scheduler.")
-    
     parser.add_argument('--num_epochs',
                         type=int,
-                        default=40)
+                        default=100)
     
     parser.add_argument('--use_checkpoint',
                         action='store_true',
@@ -124,10 +104,10 @@ if __name__ == '__main__':
     # FasterRCNN's head config
     print('[+] Building the base model with FasterRCNN head ...')
     roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['P0','P1','P2','P3'],
-                                                    output_size=7, ## 3 o 7 o 14
+                                                    output_size=7,
                                                     sampling_ratio=2)
-    anchor_sizes = ((32), (64), (128),(256) ) 
-    aspect_ratios = ((0.5,1.0, 1.5,2.0,)) * len(anchor_sizes)
+    anchor_sizes = ((32),(64),(128),(256)) 
+    aspect_ratios = ((0.5,1.0,1.5,2.0,)) * len(anchor_sizes)
     anchor_generator = torchvision.models.detection.rpn.AnchorGenerator(anchor_sizes, aspect_ratios)
     
     # Create de base model with the FasterRCNN's head
@@ -171,7 +151,7 @@ if __name__ == '__main__':
                        'pin_memory':True,
                       }
     train_dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
-    training_generator = torch.utils.data.DataLoader(train_dataset, **training_params)
+    training_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
     print('[++] Ready !')
     
     print('[+] Ready !')
@@ -181,28 +161,17 @@ if __name__ == '__main__':
     params = [p for p in base_model.parameters() if p.requires_grad]
 
     if args.optim == 'adamw':
-        optimizer = torch.optim.AdamW(params, lr=0.0001, weight_decay=0.05)
+        optimizer = torch.optim.AdamW(params, lr=base_config.TRAIN.BASE_LR, weight_decay=0.05)
         print('[+] Using AdamW optimizer')
     else:
         optimizer = torch.optim.SGD(params, base_config.TRAIN.BASE_LR, momentum=0.9, weight_decay=5e-4, nesterov=True)
         print('[+] Using SGD optimizer')
-        
-    ## Learning rate scheduler
-    if base_config.TRAIN.SCHEDULER.USE:
-        lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer,
-                                                         base_lr=base_config.TRAIN.SCHEDULER.BASE_LR,
-                                                         max_lr=base_config.TRAIN.SCHEDULER.MAX_LR, 
-                                                         step_size_up=base_config.TRAIN.SCHEDULER.STEP_SIZE_UP, 
-                                                         mode=base_config.TRAIN.SCHEDULER.MODE, 
-                                                         cycle_momentum=False,)
-        print('[+] Using CyclicLR scheduler')
-        print(f'[++] Scheduler configs: {base_config.TRAIN.SCHEDULER}')
 
     start_epoch = 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS
     best_loss = 1e5
     loss_mean = 0
-    
+
     ## Load the checkpoint if is need it
     if base_config.TRAIN.USE_CHECKPOINT:
         print('[+] Loading checkpoint...')
@@ -210,12 +179,12 @@ if __name__ == '__main__':
         
         base_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        if args.use_scheduler and checkpoint['lr_scheduler_state_dict']!=None:
-            lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
 
         best_loss = checkpoint['best_loss']
         start_epoch = checkpoint['epoch'] + 1
         print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
+        
+
 
     # Train the model
     base_model.train()
@@ -225,7 +194,7 @@ if __name__ == '__main__':
     
     for epoch in range(start_epoch, end_epoch + 1):
         loss_l = []
-        with tqdm(training_generator, unit=" batch") as tepoch:
+        with tqdm(training_loader, unit=" batch") as tepoch:
             for images, targets in tepoch:
 
                 images = [image.to(device) for image in images]
@@ -251,15 +220,12 @@ if __name__ == '__main__':
                                        ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
                                        ' - total loss: {:1.8f} - median loss: {:1.8f}'\
                                        .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
-                if args.use_scheduler:
-                    lr_scheduler.step()
 
         if loss_median < best_loss:
             best_loss = loss_median
 
             torch.save({'model_state_dict': base_model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
-                        'lr_scheduler_state_dict': lr_scheduler.state_dict() if args.use_scheduler else None,
                         'epoch': epoch,
                         'best_loss': best_loss,
                         'fn_cfg_dataset': str(args.cfg_dataset), 
