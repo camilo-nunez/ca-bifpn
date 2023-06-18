@@ -232,7 +232,7 @@ if __name__ == '__main__':
                         'fn_cfg_model': str(args.cfg_model),
                         'fpn_type': base_config.MODEL.BIFPN.TYPE,
                        },
-                       os.path.join(CHECK_PATH, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
+                       os.path.join(CHECK_PATH, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_A1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
     
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))
