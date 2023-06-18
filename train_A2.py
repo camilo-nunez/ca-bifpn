@@ -18,22 +18,23 @@ from albumentations.pytorch import ToTensorV2
 from model.builder_backbone import Backbone
 from config.basic import default_config
 from utils.datasets import VOCDetectionV2
-from utils.coco_eval import evaluateCOCO
 
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-CHECK_PATH = os.path.join('/thesis/checkpoint')
 
 def parse_option():
     parser = argparse.ArgumentParser(
         'Thesis cnunezf traning BiFPN + Fast-RCNN script - A2', add_help=True)
     
-    parser.add_argument('--path_checkpoint',
+    parser.add_argument('--checkpoint_fn',
                         type=str,
                         metavar="FILE",
                         required=True,
                         help="Checkpoint filename.")
+    parser.add_argument('--checkpoint_path',
+                        type=str,
+                        default='/thesis/checkpoint', 
+                        help='Path to complete DATASET.')
 
     parser.add_argument('--num_epochs',
                         type=int,
@@ -51,13 +52,11 @@ def parse_option():
     parser.add_argument('--batch_size',
                         type=int,
                         default=2)
-    
-
 
     args, unparsed = parser.parse_known_args()
 
     print('[+] Loading checkpoint...')
-    checkpoint = torch.load(os.path.join(CHECK_PATH, args.path_checkpoint))
+    checkpoint = torch.load(os.path.join(args.checkpoint_path, args.checkpoint_fn))
     print('[+] Ready !')
     
     print('[+] Preparing base configs...')
@@ -173,7 +172,7 @@ if __name__ == '__main__':
     loss_mean = 0
     best_loss = checkpoint['best_loss']
     
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-3, steps_per_epoch=len(training_loader), epochs=(end_epoch-start_epoch+1), pct_start=0.3)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=15e-4, steps_per_epoch=len(training_loader), epochs=(end_epoch-start_epoch+1), pct_start=0.3)
     print(f'[+] Using OneCycleLR scheduler - epochs:{(end_epoch-start_epoch+1)} - steps_per_epoch:{len(training_loader)}')
 
     # Train the model
@@ -224,7 +223,7 @@ if __name__ == '__main__':
                         'fn_cfg_model': checkpoint['fn_cfg_model'],
                         'fpn_type': base_config.MODEL.BIFPN.TYPE,
                        },
-                       os.path.join(CHECK_PATH, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_A2_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
+                       os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_A2_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
     
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))

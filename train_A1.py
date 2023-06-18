@@ -21,8 +21,6 @@ from utils.datasets import VOCDetectionV2
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-CHECK_PATH = os.path.join('/thesis/checkpoint')
-
 def parse_option():
     parser = argparse.ArgumentParser(
         'Thesis cnunezf training BiFPN + Fast-RCNN script - A1', add_help=True)
@@ -64,10 +62,15 @@ def parse_option():
     parser.add_argument('--use_checkpoint',
                         action='store_true',
                         help="Load a checkpoint.")
-    parser.add_argument('--path_checkpoint',
+    parser.add_argument('--checkpoint_fn',
                         type=str,
                         metavar="FILE",
-                        help="Path to the checkpoint file.")
+                        required=True,
+                        help="Checkpoint filename.")
+    parser.add_argument('--checkpoint_path',
+                        type=str,
+                        default='/thesis/checkpoint', 
+                        help='Path to complete DATASET.')
     
     parser.add_argument('--summary',
                         action='store_true',
@@ -175,7 +178,7 @@ if __name__ == '__main__':
     ## Load the checkpoint if is need it
     if base_config.TRAIN.USE_CHECKPOINT:
         print('[+] Loading checkpoint...')
-        checkpoint = torch.load(os.path.join(CHECK_PATH, base_config.TRAIN.CHECKPOINT_PATH))
+        checkpoint = torch.load(os.path.join(args.checkpoint_path, base_config.TRAIN.CHECKPOINT_PATH))
         
         base_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -232,7 +235,7 @@ if __name__ == '__main__':
                         'fn_cfg_model': str(args.cfg_model),
                         'fpn_type': base_config.MODEL.BIFPN.TYPE,
                        },
-                       os.path.join(CHECK_PATH, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_A1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
+                       os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_A1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
     
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))

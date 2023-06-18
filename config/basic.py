@@ -81,8 +81,8 @@ def create_train_config(args):
 
     if hasattr(args, 'use_checkpoint') and args.use_checkpoint:
         base_config.TRAIN.USE_CHECKPOINT = args.use_checkpoint
-        if hasattr(args, 'path_checkpoint') and args.path_checkpoint:
-            base_config.TRAIN.CHECKPOINT_PATH = args.path_checkpoint
-        else: raise RuntimeError('You must specify the \'--path_checkpoint\'. ')
+        if hasattr(args, 'checkpoint_fn') and args.checkpoint_fn:
+            base_config.TRAIN.CHECKPOINT_PATH = args.checkpoint_fn
+        else: raise RuntimeError('You must specify the \'--checkpoint_fn\'. ')
 
     return base_config
