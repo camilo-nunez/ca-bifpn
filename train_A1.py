@@ -65,7 +65,6 @@ def parse_option():
     parser.add_argument('--checkpoint_fn',
                         type=str,
                         metavar="FILE",
-                        required=True,
                         help="Checkpoint filename.")
     parser.add_argument('--checkpoint_path',
                         type=str,
