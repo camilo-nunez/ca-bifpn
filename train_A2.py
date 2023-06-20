@@ -55,8 +55,8 @@ def parse_option():
     
     parser.add_argument('--lr', 
                         type=float, 
-                        default=1e-4,
-                        help='Learning rate used by the \'sgd\' optimizer. Default is 1e-4.'
+                        default=5e-3,
+                        help='Learning rate used by the \'sgd\' optimizer. Default is 5e-3.'
                        )
     parser.add_argument('--wd', 
                         type=float, 
