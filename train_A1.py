@@ -46,14 +46,14 @@ def parse_option():
                         
     parser.add_argument('--lr', 
                         type=float, 
-                        default=1e-4,
-                        help='Learning rate used by the optimizer. Default is 1e-4.'
+                        default=1e-3,
+                        help='Learning rate used by the \'admaw\' optimizer. Default is 1e-3.'
                        )
-    
-    parser.add_argument('--optim', 
-                        type=str,
-                        default='adamw', 
-                        help='Select optimizer for training, suggest using \'admaw\' until the very final stage then switch to \'sgd\'.')
+    parser.add_argument('--wd', 
+                        type=float, 
+                        default=1e-5,
+                        help='Weight decay used by the \'admaw\' optimizer. Default is 1e-5.'
+                       )
     
     parser.add_argument('--num_epochs',
                         type=int,
@@ -162,12 +162,9 @@ if __name__ == '__main__':
     ## Cofig the optimizer
     params = [p for p in base_model.parameters() if p.requires_grad]
 
-    if args.optim == 'adamw':
-        optimizer = torch.optim.AdamW(params, lr=base_config.TRAIN.BASE_LR, weight_decay=0.05)
-        print('[+] Using AdamW optimizer')
-    else:
-        optimizer = torch.optim.SGD(params, base_config.TRAIN.BASE_LR, momentum=0.9, weight_decay=5e-4, nesterov=True)
-        print('[+] Using SGD optimizer')
+    optimizer = torch.optim.AdamW(params, lr=base_config.TRAIN.OPTIM.BASE_LR,
+                                  weight_decay=base_config.TRAIN.OPTIM.WEIGHT_DECAY)
+    print(f'[+] Using AdamW optimizer. Configs:{base_config.TRAIN.OPTIM}')
 
     start_epoch = 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS

@@ -43,14 +43,16 @@ def default_config():
     
     ## Train Config
     _C.TRAIN = OmegaConf.create()
-    _C.TRAIN.BASE_LR = int()
-    _C.TRAIN.OPTIM = str()
     _C.TRAIN.NUM_EPOCHS = int()
     _C.TRAIN.VAL_INTERVAL = int()
-#     _C.TRAIN.WEIGHT_DECAY = 0.05
     _C.TRAIN.USE_CHECKPOINT = False
     _C.TRAIN.CHECKPOINT_PATH = str()
     _C.TRAIN.BATCH_SIZE = int()
+    
+    _C.TRAIN.OPTIM = OmegaConf.create()
+    _C.TRAIN.OPTIM.BASE_LR = float()
+    _C.TRAIN.OPTIM.WEIGHT_DECAY = float()
+    _C.TRAIN.OPTIM.MOMENTUM = float()
 
     return _C
 
@@ -66,9 +68,10 @@ def create_train_config(args):
         base_config.MODEL.BIFPN.TYPE = args.fpn_type
     
     if hasattr(args, 'lr') and args.lr:
-        base_config.TRAIN.BASE_LR = args.lr
-    if hasattr(args, 'optim') and args.optim:
-        base_config.TRAIN.OPTIM = args.optim
+        base_config.TRAIN.OPTIM.BASE_LR = args.lr
+    if hasattr(args, 'wd') and args.wd:
+        base_config.TRAIN.OPTIM.WEIGHT_DECAY = args.wd
+
     if hasattr(args, 'num_epochs') and args.num_epochs:
         base_config.TRAIN.NUM_EPOCHS = args.num_epochs
     if hasattr(args, 'val_interval') and args.val_interval:

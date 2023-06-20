@@ -52,6 +52,22 @@ def parse_option():
     parser.add_argument('--batch_size',
                         type=int,
                         default=2)
+    
+    parser.add_argument('--lr', 
+                        type=float, 
+                        default=1e-4,
+                        help='Learning rate used by the \'sgd\' optimizer. Default is 1e-4.'
+                       )
+    parser.add_argument('--wd', 
+                        type=float, 
+                        default=5e-4,
+                        help='Weight decay used by the \'sgd\' optimizer. Default is 5e-4.'
+                       )
+    parser.add_argument('--m', 
+                        type=float, 
+                        default=0.3,
+                        help='Momentum used by the \'sgd\' optimizer. Default is 0.3.'
+                       )
 
     args, unparsed = parser.parse_known_args()
 
@@ -74,6 +90,13 @@ def parse_option():
         base_config.DATASET.PATH = args.dataset_path
     if hasattr(args, 'num_epochs') and args.num_epochs:
         base_config.TRAIN.NUM_EPOCHS = args.num_epochs
+        
+    if hasattr(args, 'lr') and args.lr:
+        base_config.TRAIN.OPTIM.BASE_LR = args.lr
+    if hasattr(args, 'wd') and args.wd:
+        base_config.TRAIN.OPTIM.WEIGHT_DECAY = args.wd
+    if hasattr(args, 'm') and args.m:
+        base_config.TRAIN.OPTIM.MOMENTUM = args.m
     
     print('[+] Ready !')
 
@@ -162,8 +185,12 @@ if __name__ == '__main__':
     ## Cofig the optimizer
     params = [p for p in base_model.parameters() if p.requires_grad]
 
-    optimizer = torch.optim.SGD(params, 1e-4, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    print('[+] Using SGD optimizer')
+    optimizer = torch.optim.SGD(params,
+                                lr=base_config.TRAIN.OPTIM.BASE_LR,
+                                momentum=base_config.TRAIN.OPTIM.MOMENTUM,
+                                weight_decay=base_config.TRAIN.OPTIM.WEIGHT_DECAY,
+                                nesterov=True)
+    print(f'[+] Using SGD optimizer. Configs:{base_config.TRAIN.OPTIM}')
 
     start_epoch = checkpoint['epoch'] + 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS
@@ -172,7 +199,7 @@ if __name__ == '__main__':
     loss_mean = 0
     best_loss = checkpoint['best_loss']
     
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=15e-4, steps_per_epoch=len(training_loader), epochs=(end_epoch-start_epoch+1), pct_start=0.3)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=base_config.TRAIN.OPTIM.BASE_LR, steps_per_epoch=len(training_loader), epochs=(end_epoch-start_epoch+1), pct_start=0.3)
     print(f'[+] Using OneCycleLR scheduler - epochs:{(end_epoch-start_epoch+1)} - steps_per_epoch:{len(training_loader)}')
 
     # Train the model
