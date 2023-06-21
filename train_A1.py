@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import argparse
 import os
 from tqdm import tqdm
@@ -8,6 +5,7 @@ from datetime import datetime
 import numpy as np
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from torchinfo import summary
 
@@ -90,6 +88,9 @@ def parse_option():
     return args, config
 
 if __name__ == '__main__':
+    
+    # Writer will output to ./runs/ directory by default
+    writer = SummaryWriter()
                         
     # Load configs for the model and the dataset
     args, base_config = parse_option()
@@ -170,6 +171,7 @@ if __name__ == '__main__':
     end_epoch = base_config.TRAIN.NUM_EPOCHS
     best_loss = 1e5
     loss_mean = 0
+    global_steps = 0
 
     ## Load the checkpoint if is need it
     if base_config.TRAIN.USE_CHECKPOINT:
@@ -213,12 +215,24 @@ if __name__ == '__main__':
 
                 loss_l.append(losses.item())
                 loss_median = np.median(np.array(loss_l))
-
-
-                tepoch.set_description('Epoch: {}/{}. lr: {:1.8f} loss_classifier: {:1.8f} - loss_box_reg: {:1.8f}'\
+                
+                description_s = 'Epoch: {}/{}. lr: {:1.6f} loss_classifier: {:1.8f} - loss_box_reg: {:1.8f}'\
                                        ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
                                        ' - total loss: {:1.8f} - median loss: {:1.8f}'\
-                                       .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
+                                       .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median)
+
+                tepoch.set_description(description_s)
+                
+                ## to board
+                writer.add_text(f"A1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}", description_s, global_steps)
+                writer.add_scalar('Loss/loss_classifier', loss_dict['loss_classifier'], global_steps)
+                writer.add_scalar('Loss/loss_box_reg', loss_dict['loss_box_reg'], global_steps)
+                writer.add_scalar('Loss/loss_objectness', loss_dict['loss_objectness'], global_steps)
+                writer.add_scalar('Loss/loss_rpn_box_reg', loss_dict['loss_rpn_box_reg'], global_steps)
+                writer.add_scalar('Loss/total_loss', losses.item(), global_steps)
+                writer.add_scalar('Loss/median_loss', loss_median, global_steps)
+                
+                global_steps+=1
 
         if loss_median < best_loss:
             best_loss = loss_median
@@ -235,3 +249,5 @@ if __name__ == '__main__':
     
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))
+    
+    writer.close()
