@@ -5,3 +5,4 @@ Pillow==9.5.0
 pycocotools
 timm==0.6.13
 torchinfo
+ujson
