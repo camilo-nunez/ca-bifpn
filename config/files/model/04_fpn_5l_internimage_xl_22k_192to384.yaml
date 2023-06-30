@@ -16,5 +16,5 @@ MODEL:
         URL: 'https://huggingface.co/OpenGVLab/InternImage/resolve/main/internimage_xl_22k_192to384.pth'
     BIFPN:
         NAME: 'fpn_5l'
-        NUM_CHANNELS: 112
+        NUM_CHANNELS: 256
         NUM_LAYERS: 5
