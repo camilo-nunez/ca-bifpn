@@ -14,7 +14,9 @@ from albumentations.pytorch import ToTensorV2
 
 from model.builder_backbone import Backbone
 from config.basic import create_train_config
-from utils.datasets import VOCDetectionV2
+from utils.datasets import VOCDetectionV2, CocoDetectionV2
+
+AVAILABLE_DATASETS = ['coco2017', 'voc2012']
 
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -97,7 +99,7 @@ if __name__ == '__main__':
 
     # Check the principal exceptions
     if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
-    if base_config.DATASET.NAME!='voc2012': raise Exception('This script only work with the dataset VOC2012.')
+    if base_config.DATASET.NAME not in AVAILABLE_DATASETS: raise Exception('This script only work with the dataset VOC2012.')
         
     print(f'[+] backbone used: {base_config.MODEL.BACKBONE.NAME} - bifpn used: {base_config.MODEL.BIFPN.NAME} ')
     
@@ -125,11 +127,18 @@ if __name__ == '__main__':
     # Display the summary of the net
     if args.summary: summary(base_model)
     
-    # Load VOC 2012 dataset
+    # Load the dataset
     
     ## Albumentations to use
-    print('[+] Loading VOC 2012 dataset...')
+    print(f'[+] Loading {base_config.DATASET.NAME} dataset...')
     print(f'[++] Using batch_size: {base_config.TRAIN.BATCH_SIZE}')
+
+    if base_config.DATASET.NAME == 'voc2012':
+        bbox_dataset_params = A.BboxParams(format='pascal_voc', label_fields=['labels'])
+    elif base_config.DATASET.NAME == 'coco2017':
+        bbox_dataset_params = A.BboxParams(format='pascal_voc', label_fields=['category_ids'])
+    
+    
     train_transform = A.Compose([A.RandomBrightnessContrast(p=0.4),
                                  A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.6),
                                  A.InvertImg(p=0.5),
@@ -141,19 +150,26 @@ if __name__ == '__main__':
                                              std=[0.229, 0.224, 0.225],
                                              max_pixel_value=255.0),
                                  ToTensorV2()
-                                ],bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels'])
+                                ],bbox_params=bbox_dataset_params
                                )
-    
+
     ## Training dataset
     print('[++] Loading training dataset...')
     training_params = {'batch_size': base_config.TRAIN.BATCH_SIZE,
                        'shuffle': True,
                        'drop_last': True,
                        'collate_fn': lambda batch: tuple(zip(*batch)),
-                       'num_workers': 8,
+                       'num_workers': 4,
                        'pin_memory':True,
                       }
-    train_dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
+
+    if base_config.DATASET.NAME == 'voc2012':
+        train_dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
+    elif base_config.DATASET.NAME == 'coco2017':
+        train_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/train2017'),
+                                        annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_train2017.json'),
+                                        transform = train_transform)
+
     training_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
     print('[++] Ready !')
     
@@ -193,6 +209,8 @@ if __name__ == '__main__':
     print('[+] Starting training ...')
     start_t = datetime.now()
     
+    from torchvision.transforms.functional import pil_to_tensor
+    
     for epoch in range(start_epoch, end_epoch + 1):
         loss_l = []
         with tqdm(training_loader, unit=" batch") as tepoch:
@@ -202,7 +220,6 @@ if __name__ == '__main__':
                 targets = [{k: v.to(device) for k, v in t.items() if (k=='boxes' or k=='labels')} for t in targets]
 
                 if not all(('boxes' in d.keys() and 'labels' in d.keys()) for d in targets): continue
-
 
                 loss_dict = base_model(images, targets)
                 losses = sum(loss for loss in loss_dict.values())
