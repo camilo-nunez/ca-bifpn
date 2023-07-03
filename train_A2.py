@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import argparse
 import os
 from tqdm import tqdm
@@ -9,6 +6,7 @@ import numpy as np
 from omegaconf import OmegaConf
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from torchinfo import summary
 
@@ -17,7 +15,7 @@ from albumentations.pytorch import ToTensorV2
 
 from model.builder_backbone import Backbone
 from config.basic import default_config
-from utils.datasets import VOCDetectionV2
+from utils.datasets import VOCDetectionV2, CocoDetectionV2
 
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,10 +74,10 @@ def parse_option():
     print('[+] Ready !')
     
     print('[+] Preparing base configs...')
+    
     model_conf = OmegaConf.load(checkpoint['fn_cfg_model'])
     dataset_conf = OmegaConf.load(checkpoint['fn_cfg_dataset'])
     def_config = default_config()
-    
     base_config = OmegaConf.merge(def_config, model_conf, dataset_conf)
     
     base_config.MODEL.BIFPN.TYPE = checkpoint['fpn_type']
@@ -102,15 +100,16 @@ def parse_option():
 
     return args, base_config, checkpoint
 
-
 if __name__ == '__main__':
+    
+    # Writer will output to ./runs/ directory by default
+    writer = SummaryWriter()
 
     # Load configs for the model and the dataset
     args, base_config, checkpoint = parse_option()
     
     # Check the principal exceptions
     if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
-    if base_config.DATASET.NAME!='voc2012': raise Exception('This script only work with the dataset VOC2012.')
         
     print(f'[+] backbone used: {base_config.MODEL.BACKBONE.NAME} - bifpn used: {base_config.MODEL.BIFPN.NAME} ')
     
@@ -147,11 +146,17 @@ if __name__ == '__main__':
     print(f"[+] Ready. last_epoch: {checkpoint['epoch']} - last_loss: {checkpoint['best_loss']}")
     
     
-    # Load VOC 2012 dataset
+    # Load dataset
     
     ## Albumentations to use
-    print('[+] Loading VOC 2012 dataset...')
+    print(f'[+] Loading {base_config.DATASET.NAME} dataset...')
     print(f'[++] Using batch_size: {base_config.TRAIN.BATCH_SIZE}')
+
+    if base_config.DATASET.NAME == 'voc2012':
+        bbox_dataset_params = A.BboxParams(format='pascal_voc', label_fields=['labels'])
+    elif base_config.DATASET.NAME == 'coco2017':
+        bbox_dataset_params = A.BboxParams(format='pascal_voc', label_fields=['category_ids'])
+
     train_transform = A.Compose([A.RandomBrightnessContrast(p=0.4),
                                  A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.4),
                                  A.InvertImg(p=0.4),
@@ -175,7 +180,14 @@ if __name__ == '__main__':
                        'num_workers': 8,
                        'pin_memory':True,
                       }
-    train_dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
+
+    if base_config.DATASET.NAME == 'voc2012':
+        train_dataset = VOCDetectionV2(root=os.path.join(base_config.DATASET.PATH), transform=train_transform)
+    elif base_config.DATASET.NAME == 'coco2017':
+        train_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/train2017'),
+                                        annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_train2017.json'),
+                                        transform = train_transform)
+
     training_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
     print('[++] Ready !')
     
@@ -195,12 +207,11 @@ if __name__ == '__main__':
     start_epoch = checkpoint['epoch'] + 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS
     if end_epoch < start_epoch: raise Exception(f'The number of epochs must be greater than {start_epoch} of the orignal train A1 epochs')
-    best_loss = 1e5
-    loss_mean = 0
     best_loss = checkpoint['best_loss']
+    global_steps = 0
     
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=base_config.TRAIN.OPTIM.BASE_LR, steps_per_epoch=len(training_loader), epochs=(end_epoch-start_epoch+1), pct_start=0.3)
-    print(f'[+] Using OneCycleLR scheduler - epochs:{(end_epoch-start_epoch+1)} - steps_per_epoch:{len(training_loader)}')
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=1)
+    print(f'[+] Using CosineAnnealingWarmRestarts scheduler - epochs:{(end_epoch-start_epoch+1)}')
 
     # Train the model
     base_model.train()
@@ -211,7 +222,8 @@ if __name__ == '__main__':
     for epoch in range(start_epoch, end_epoch + 1):
         loss_l = []
         with tqdm(training_loader, unit=" batch") as tepoch:
-            for images, targets in tepoch:
+            for i, data in enumerate(tepoch):
+                images, targets = data
 
                 images = [image.to(device) for image in images]
                 targets = [{k: v.to(device) for k, v in t.items() if (k=='boxes' or k=='labels')} for t in targets]
@@ -236,7 +248,18 @@ if __name__ == '__main__':
                                        ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
                                        ' - total loss: {:1.8f} - median loss: {:1.8f}'\
                                        .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
-                scheduler.step()
+                scheduler.step(epoch + i/len(tepoch))
+                
+                ## to board
+                writer.add_scalar('Loss/loss_classifier', loss_dict['loss_classifier'], global_steps)
+                writer.add_scalar('Loss/loss_box_reg', loss_dict['loss_box_reg'], global_steps)
+                writer.add_scalar('Loss/loss_objectness', loss_dict['loss_objectness'], global_steps)
+                writer.add_scalar('Loss/loss_rpn_box_reg', loss_dict['loss_rpn_box_reg'], global_steps)
+                writer.add_scalar('Loss/total_loss', losses.item(), global_steps)
+                writer.add_scalar('Loss/median_loss', loss_median, global_steps)
+                writer.add_scalar('current_lr', current_lr, global_steps)
+                
+                global_steps+=1
 
         if loss_median < best_loss:
             best_loss = loss_median
@@ -254,3 +277,5 @@ if __name__ == '__main__':
     
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))
+    
+    writer.close()
