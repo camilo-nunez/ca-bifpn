@@ -186,7 +186,6 @@ if __name__ == '__main__':
     start_epoch = 1
     end_epoch = base_config.TRAIN.NUM_EPOCHS
     best_loss = 1e5
-    loss_mean = 0
     global_steps = 0
 
     ## Load the checkpoint if is need it
