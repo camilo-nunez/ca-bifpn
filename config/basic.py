@@ -53,6 +53,10 @@ def default_config():
     _C.TRAIN.OPTIM.BASE_LR = float()
     _C.TRAIN.OPTIM.WEIGHT_DECAY = float()
     _C.TRAIN.OPTIM.MOMENTUM = float()
+    
+    _C.TRAIN.SCHEDULER = OmegaConf.create()
+    _C.TRAIN.SCHEDULER.T_0 = int()
+    _C.TRAIN.SCHEDULER.T_MULT = float()
 
     return _C
 

@@ -66,6 +66,17 @@ def parse_option():
                         default=0.3,
                         help='Momentum used by the \'sgd\' optimizer. Default is 0.3.'
                        )
+    
+    parser.add_argument('--t0', 
+                        type=int, 
+                        default=5,
+                        help='Number of iterations for the first restart, used by the \'CosineAnnealingWarmRestarts\' scheduler. Default is 5.'
+                       )
+    parser.add_argument('--t_mult', 
+                        type=int, 
+                        default=1,
+                        help='A factor increases after a restart, used by the \'CosineAnnealingWarmRestarts\' scheduler. Default is 1.'
+                       )
 
     args, unparsed = parser.parse_known_args()
 
@@ -95,6 +106,11 @@ def parse_option():
         base_config.TRAIN.OPTIM.WEIGHT_DECAY = args.wd
     if hasattr(args, 'm') and args.m:
         base_config.TRAIN.OPTIM.MOMENTUM = args.m
+        
+    if hasattr(args, 't0') and args.t0:
+        base_config.TRAIN.SCHEDULER.T_0 = args.t0
+    if hasattr(args, 't_mult') and args.t_mult:
+        base_config.TRAIN.SCHEDULER.T_MULT = args.t_mult
     
     print('[+] Ready !')
 
@@ -210,8 +226,11 @@ if __name__ == '__main__':
     best_loss = checkpoint['best_loss']
     global_steps = 0
     
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=1)
-    print(f'[+] Using CosineAnnealingWarmRestarts scheduler - epochs:{(end_epoch-start_epoch+1)}')
+    config_scheduler = {'T_0' : base_config.TRAIN.SCHEDULER.T_0,
+                        'T_mult': base_config.TRAIN.SCHEDULER.T_MULT,
+                       }
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **config_scheduler)
+    print(f'[+] Using CosineAnnealingWarmRestarts scheduler - Configs: {config_scheduler} - epochs:{(end_epoch-start_epoch+1)}')
 
     # Train the model
     base_model.train()
@@ -246,8 +265,8 @@ if __name__ == '__main__':
 
                 tepoch.set_description('Epoch: {}/{}. lr: {:1.8f} loss_classifier: {:1.8f} - loss_box_reg: {:1.8f}'\
                                        ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
-                                       ' - total loss: {:1.8f} - median loss: {:1.8f}'\
-                                       .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median))
+                                       ' - median loss: {:1.8f}'\
+                                       .format(epoch,end_epoch,current_lr,*loss_dict.values(), loss_median))
                 scheduler.step(epoch + i/len(tepoch))
                 
                 ## to board
@@ -255,7 +274,6 @@ if __name__ == '__main__':
                 writer.add_scalar('Loss/loss_box_reg', loss_dict['loss_box_reg'], global_steps)
                 writer.add_scalar('Loss/loss_objectness', loss_dict['loss_objectness'], global_steps)
                 writer.add_scalar('Loss/loss_rpn_box_reg', loss_dict['loss_rpn_box_reg'], global_steps)
-                writer.add_scalar('Loss/total_loss', losses.item(), global_steps)
                 writer.add_scalar('Loss/median_loss', loss_median, global_steps)
                 writer.add_scalar('current_lr', current_lr, global_steps)
                 
