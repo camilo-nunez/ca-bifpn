@@ -78,6 +78,10 @@ def parse_option():
                         help='A factor increases after a restart, used by the \'CosineAnnealingWarmRestarts\' scheduler. Default is 1.'
                        )
 
+    parser.add_argument('--freeze_neck',
+                        action='store_true',
+                        help="Freeze the FPN neck.")
+
     args, unparsed = parser.parse_known_args()
 
     print('[+] Loading checkpoint...')
@@ -131,7 +135,11 @@ if __name__ == '__main__':
     
     faster_rcnn_backbone = Backbone(base_config).to(device)
     faster_rcnn_backbone.out_channels = base_config.MODEL.BIFPN.NUM_CHANNELS 
-
+    
+    if hasattr(args, 'freeze_neck') and args.freeze_neck:
+        for param in faster_rcnn_backbone.fpn_backbone.parameters():
+            param.requires_grad = False
+    
     # FasterRCNN's head config
     print('[+] Building the base model with FasterRCNN head ...')
     roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['P0','P1','P2','P3'],
