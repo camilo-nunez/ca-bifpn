@@ -21,7 +21,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def parse_option():
     parser = argparse.ArgumentParser(
-        'Thesis cnunezf training BiFPN + Fast-RCNN script - A1', add_help=True)
+        'Thesis cnunezf training BiFPN + Mask-RCNN script - B1', add_help=True)
     
     parser.add_argument('--cfg_model',
                         type=str,
