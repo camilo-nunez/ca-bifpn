@@ -9,6 +9,7 @@ import albumentations as A
 import numpy as np
 
 from typing import Any, Callable, List, Optional, Tuple
+from pycocotools import mask as coco_mask
 
 try:
     from defusedxml.ElementTree import parse as ET_parse
@@ -58,6 +59,22 @@ class VOCDetectionV2(VOCDetection):
     
 class CocoDetectionV2(CocoDetection):
     
+    def _convert_coco_poly_to_mask(self, segmentations, height, width):
+        masks = []
+        for polygons in segmentations:
+            rles = coco_mask.frPyObjects(polygons, height, width)
+            mask = coco_mask.decode(rles)
+            if len(mask.shape) < 3:
+                mask = mask[..., None]
+            mask = torch.as_tensor(mask, dtype=torch.uint8)
+            mask = mask.any(dim=2)
+            masks.append(mask)
+        if masks:
+            masks = torch.stack(masks, dim=0)
+        else:
+            masks = torch.zeros((0, height, width), dtype=torch.uint8)
+        return masks
+
     def _has_only_empty_bbox(self, anno):
         return all(any(o <= 1 for o in obj["bbox"][2:]) for obj in anno)
 
@@ -113,6 +130,8 @@ class CocoDetectionV2(CocoDetection):
         id = self.ids_n[index]
         
         image = self._load_image(id)
+        h, w, _ = image.shape
+        
         target = self._load_target(id)
         
         n_target = dict()
@@ -124,14 +143,22 @@ class CocoDetectionV2(CocoDetection):
         n_target["bbox"] = torch.as_tensor(n_target["bbox"], dtype=torch.float32)
         n_target["bbox"] = box_convert(n_target["bbox"], in_fmt='xywh', out_fmt='xyxy')
         
+        n_target["masks"] = self._convert_coco_poly_to_mask(n_target['segmentation'], h, w)
+        del n_target['segmentation']
+
         f_target = dict()
         if self.transform is not None:
             if not isinstance(self.transform, A.core.composition.Compose): RuntimeError("[+] The transform compose must by an Albumentations's type.!")
-            transformed = self.transform(image=np.asarray(image), bboxes=n_target['bbox'], category_ids=n_target['category_id'])
+            transformed = self.transform(image=np.asarray(image), 
+                                         bboxes=n_target['bbox'],
+                                         masks=[m.numpy() for m in n_target['masks']],
+                                         category_ids=n_target['category_id'])
             image = transformed['image']
+            f_target["masks"] = torch.stack(transformed['masks'])
             f_target["boxes"] = torch.as_tensor(transformed['bboxes'], dtype=torch.float32)
             f_target["labels"] = torch.as_tensor(transformed['category_ids'], dtype=torch.int64)
         else:
+            f_target["masks"] = n_target['masks']
             f_target["boxes"] = torch.as_tensor(n_target['bbox'], dtype=torch.float32)
             f_target["labels"] = torch.as_tensor(n_target['category_id'], dtype=torch.int64)
         f_target["image_id"] = torch.tensor([index])
