@@ -208,8 +208,6 @@ if __name__ == '__main__':
     print('[+] Starting training ...')
     start_t = datetime.now()
     
-    from torchvision.transforms.functional import pil_to_tensor
-    
     for epoch in range(start_epoch, end_epoch + 1):
         loss_l = []
         with tqdm(training_loader, unit=" batch") as tepoch:
@@ -254,6 +252,7 @@ if __name__ == '__main__':
             best_loss = loss_median
 
             torch.save({'model_state_dict': base_model.state_dict(),
+                        'neck_state_dict': base_model.backbone.fpn_backbone.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'epoch': epoch,
                         'best_loss': best_loss,

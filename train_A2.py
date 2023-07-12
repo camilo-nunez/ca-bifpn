@@ -291,6 +291,7 @@ if __name__ == '__main__':
             best_loss = loss_median
 
             torch.save({'model_state_dict': base_model.state_dict(),
+                        'neck_state_dict': base_model.backbone.fpn_backbone.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'scheduler_state_dict': scheduler.state_dict(),
                         'epoch': epoch,
