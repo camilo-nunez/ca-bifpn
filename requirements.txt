@@ -6,3 +6,4 @@ pycocotools
 timm==0.6.13
 torchinfo
 ujson
+grad-cam
