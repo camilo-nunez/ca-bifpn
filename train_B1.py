@@ -19,6 +19,8 @@ from utils.datasets import CocoDetectionV2
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+URL_NECK_WEIGHT = "https://github.com/camilo-nunez/ca-bifpn/releases/download/v1d20230714/20230714_{0}_FasterRCNN.pth"
+
 def parse_option():
     parser = argparse.ArgumentParser(
         'Thesis cnunezf training BiFPN + Mask-RCNN script - B1', add_help=True)
@@ -81,6 +83,10 @@ def parse_option():
     parser.add_argument('--batch_size',
                         type=int,
                         default=2)
+    
+    parser.add_argument('--with_neck_checkpoint',
+                        action='store_true',
+                        help="Use checkpoint for neck's weight.")
         
     args, unparsed = parser.parse_known_args()
     config = create_train_config(args)
@@ -128,20 +134,39 @@ if __name__ == '__main__':
                                                       mask_roi_pool=mask_roi_pooler).to(device)
     print('[+] Ready !')
     
+    # Load the neck checkpoint
+    if hasattr(args, 'with_neck_checkpoint') and args.with_neck_checkpoint:
+        print("[+] Loading neck's weight from checkpoint...")
+        
+        url_t = URL_NECK_WEIGHT.format(f'{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}')
+        print(f"[++] Using the checkpoint {url_t}")
+        checkpoint_neck = torch.hub.load_state_dict_from_url(url_t)
+        
+        if os.path.basename(checkpoint_neck['fn_cfg_model'])!=os.path.basename(args.cfg_model): raise Exception('The \'cfg_model\' used for the training of the neck is different from your actual \'cfg_model\'.')
+    
+        out_neck_check = base_model.backbone.fpn_backbone.load_state_dict(checkpoint_neck['neck_state_dict'], strict=False)
+
+        if len(out_neck_check.unexpected_keys)!=0: 
+            print(f'[++] The unexpected keys was: {out_neck_check.unexpected_keys}')
+        else:
+            print('[++] All keys matched successfully')
+        
+        print(f'[+] Ready !')
+
     # Display the summary of the net
     if args.summary: summary(base_model)
     
     # Load the dataset
-
     print(f'[+] Loading {base_config.DATASET.NAME} dataset...')
     print(f'[++] Using batch_size: {base_config.TRAIN.BATCH_SIZE}')
     
     ## Albumentations to use
-    train_transform = A.Compose([A.RandomBrightnessContrast(p=0.4),
-                                 A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.6),
+    train_transform = A.Compose([A.Resize(base_config.MODEL.BACKBONE.IMAGE_SIZE, base_config.MODEL.BACKBONE.IMAGE_SIZE),
+                                 A.RandomBrightnessContrast(p=0.4),
+                                 A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.5),
                                  A.InvertImg(p=0.5),
-                                 A.Blur(p=0.5),
-                                 A.GaussNoise(p=0.6),
+                                 A.Blur(p=0.3),
+                                 A.GaussNoise(p=0.4),
                                  A.Flip(p=0.4),
                                  A.RandomRotate90(p=0.4),
                                  A.Normalize(mean=[0.485, 0.456, 0.406],
@@ -192,8 +217,6 @@ if __name__ == '__main__':
         best_loss = checkpoint['best_loss']
         start_epoch = checkpoint['epoch'] + 1
         print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
-        
-
 
     # Train the model
     base_model.train()
