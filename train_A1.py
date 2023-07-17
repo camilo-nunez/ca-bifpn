@@ -139,7 +139,8 @@ if __name__ == '__main__':
         bbox_dataset_params = A.BboxParams(format='pascal_voc', label_fields=['category_ids'])
     
     
-    train_transform = A.Compose([A.RandomBrightnessContrast(p=0.4),
+    train_transform = A.Compose([A.Resize(base_config.MODEL.BACKBONE.IMAGE_SIZE, base_config.MODEL.BACKBONE.IMAGE_SIZE),
+                                 A.RandomBrightnessContrast(p=0.4),
                                  A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.6),
                                  A.InvertImg(p=0.5),
                                  A.Blur(p=0.5),
@@ -230,10 +231,10 @@ if __name__ == '__main__':
                 loss_l.append(losses.item())
                 loss_median = np.median(np.array(loss_l))
                 
-                description_s = 'Epoch: {}/{}. lr: {:1.6f} loss_classifier: {:1.8f} - loss_box_reg: {:1.8f}'\
-                                       ' - loss_objectness: {:1.8f} - loss_rpn_box_reg: {:1.8f}'\
-                                       ' - total loss: {:1.8f} - median loss: {:1.8f}'\
-                                       .format(epoch,end_epoch,current_lr,*loss_dict.values(),losses.item(), loss_median)
+                description_s = 'Epoch: {}/{}. lr: {:1.6f} loss_classifier: {:1.5f} - loss_box_reg: {:1.5f}'\
+                                       ' - loss_objectness: {:1.5f} - loss_rpn_box_reg: {:1.5f}'\
+                                       ' - median loss: {:1.5f}'\
+                                       .format(epoch,end_epoch,current_lr,*loss_dict.values(), loss_median)
 
                 tepoch.set_description(description_s)
                 
