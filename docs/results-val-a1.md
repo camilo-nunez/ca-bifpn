@@ -1020,42 +1020,10 @@ IoU metric: bbox
 [+] Ready, the validation phase took: 0:09:14.701547
 ```
 
+## Config: internimage_l_22k_192to384
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### Neck: BS - OPT: AdamW - Last Epoch: 98
 ```
-root@9ba0fdc560d5:/thesis/ca-bifpn# python val_A1.py --summary --batch_size 4 --path_checkpoint /thesis/checkpoint/A2/20230710_1329_A2_ca_internimage_b_1k_224_fpn_5l_191.pth
-[+] Loading checkpoint...
-[+] Ready !
-[+] Preparing base configs...
-[+] Ready !
-[+] backbone used: internimage_b_1k_224 - bifpn used: fpn_5l 
-using core type: DCNv3
-using activation layer: GELU
-using main norm layer: LN
-using dpr: linear, 0.4
-level2_post_norm: False
-level2_post_norm_block_ids: None
-res_post_norm: False
 root@9ba0fdc560d5:/thesis/ca-bifpn# python val_A1.py --summary --batch_size 4 --path_checkpoint /thesis/checkpoint/base/20230702_0830_A1_bs_internimage_l_22k_192to384_fpn_5l_98.pth
 [+] Loading checkpoint...
 [+] Ready !
@@ -1136,7 +1104,90 @@ IoU metric: bbox
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.44836
 [+] Ready, the validation phase took: 0:14:57.352857
 ```
+### Neck: BS - OPT: SGD - Last Epoch: 196
+```
+root@9ba0fdc560d5:/thesis/ca-bifpn# python val_A1.py --path_checkpoint /thesis/checkpoint/A2/20230713_0603_A2_bs_internimage_l_22k_192to384_fpn_5l_196.pth --summary --batch_size 4
+[+] Loading checkpoint...
+[+] Ready !
+[+] Preparing base configs...
+[+] Ready !
+[+] backbone used: internimage_l_22k_192to384 - bifpn used: fpn_5l 
+using core type: DCNv3
+using activation layer: GELU
+using main norm layer: LN
+using dpr: linear, 0.4
+level2_post_norm: False
+level2_post_norm_block_ids: None
+res_post_norm: False
+[+] The unexpected keys was: ['conv_head.0.weight', 'conv_head.1.0.weight', 'conv_head.1.0.bias', 'conv_head.1.0.running_mean', 'conv_head.1.0.running_var', 'conv_head.1.0.num_batches_tracked', 'head.weight', 'head.bias']
+[+] BiFPN loaded
+[+] Building the base model with FasterRCNN head ...
+[++] Numbers of classes: 21
+[+] Ready !
+====================================================================================================
+Layer (type:depth-idx)                                                      Param #
+====================================================================================================
+FasterRCNN                                                                  --
+├─GeneralizedRCNNTransform: 1-1                                             --
+├─Backbone: 1-2                                                             --
+│    └─InternImage: 2-1                                                     --
+│    │    └─StemLayer: 3-1                                                  (118,080)
+│    │    └─Dropout: 3-2                                                    --
+│    │    └─ModuleList: 3-3                                                 (218,834,290)
+│    └─Sequential: 2-2                                                      --
+│    │    └─BiFPN: 3-4                                                      1,029,135
+│    │    └─BiFPN: 3-5                                                      411,663
+│    │    └─BiFPN: 3-6                                                      411,663
+│    │    └─BiFPN: 3-7                                                      411,663
+│    │    └─BiFPN: 3-8                                                      411,663
+├─RegionProposalNetwork: 1-3                                                --
+│    └─AnchorGenerator: 2-3                                                 --
+│    └─RPNHead: 2-4                                                         --
+│    │    └─Sequential: 3-9                                                 590,080
+│    │    └─Conv2d: 3-10                                                    4,112
+│    │    └─Conv2d: 3-11                                                    16,448
+├─RoIHeads: 1-4                                                             --
+│    └─MultiScaleRoIAlign: 2-5                                              --
+│    └─TwoMLPHead: 2-6                                                      --
+│    │    └─Linear: 3-12                                                    12,846,080
+│    │    └─Linear: 3-13                                                    1,049,600
+│    └─FastRCNNPredictor: 2-7                                               --
+│    │    └─Linear: 3-14                                                    21,525
+│    │    └─Linear: 3-15                                                    86,100
+====================================================================================================
+Total params: 236,242,102
+Trainable params: 17,289,732
+Non-trainable params: 218,952,370
+====================================================================================================
+[+] Loading checkpoint...
+[++] All keys matched successfully
+[+] Ready. last_epoch: 196 - last_loss: 0.3548715114593506
+[+] Loading VOC 2012 dataset...
+[++] Loading validation dataset...
+[++] Ready !
+[+] Ready !
+[+] Starting validation ...
+Creating index...
+index created!
+Accumulating evaluation results...
+DONE (t=1.65s).
+IoU metric: bbox
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.27058
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.46173
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.28070
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.06972
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.17048
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.32655
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.32244
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.42244
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.42408
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.15481
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.30896
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.47969
+[+] Ready, the validation phase took: 0:15:06.002116
+```
 
+### Neck: CA - OPT: AdamW - Last Epoch: 99
 ```
 root@9ba0fdc560d5:/thesis/ca-bifpn# python val_A1.py --summary --batch_size 4 --path_checkpoint /thesis/checkpoint/base/20230704_2037_A1_ca_internimage_l_22k_192to384_fpn_5l_99.pth
 [+] Loading checkpoint...
@@ -1218,3 +1269,21 @@ IoU metric: bbox
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.43595
 [+] Ready, the validation phase took: 0:17:30.134941
 ```
+### Neck: CA - OPT: SGD - Last Epoch: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
