@@ -12,18 +12,19 @@ from torchinfo import summary
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-from model.builder_backbone import Backbone
-from config.basic import create_train_config
-from utils.datasets import CocoDetectionV2
+from model.builder import BackboneNeck, AVAILABLE_NECKS, AVAILABLE_BACKBONES
+from config.init import create_train_config_A
+from utils.datasets import VOCDetectionV2, CocoDetectionV2
+
+AVAILABLE_DATASETS = ['coco2017']
 
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-URL_NECK_WEIGHT = "https://github.com/camilo-nunez/ca-bifpn/releases/download/v1d20230714/20230714_{0}_FasterRCNN.pth"
 
 def parse_option():
     parser = argparse.ArgumentParser(
-        'Thesis cnunezf training BiFPN + Mask-RCNN script - B1', add_help=True)
+        'Thesis cnunezf training model + Mask-RCNN script - B', add_help=True)
     
     parser.add_argument('--cfg_model',
                         type=str,
@@ -38,12 +39,31 @@ def parse_option():
                         metavar="FILE",
                         help='Path to DATASET config file. Must be a YAML file.'
                        )
-    
-    parser.add_argument('--fpn_type',
+    parser.add_argument('--dataset_path',
                         type=str,
-                        required=True,
-                        help='Select the FPN backbone, this should be \'bs\' (refer to baseline) or \'ca\' (refer to context agregation).')
-                        
+                        default='/thesis/classical', 
+                        help='Path to complete DATASET.')
+    
+    parser.add_argument('--num_epochs',
+                        type=int,
+                        default=12,
+                        help='1x schedule (~12 COCO epochs) and 3x schedule (~37 COCO epochs). Default 1x.')
+    parser.add_argument('--batch_size',
+                        type=int,
+                        default=2)
+    
+    parser.add_argument('--checkpoint_path',
+                        type=str,
+                        default='/thesis/checkpoint', 
+                        help='Path to complete DATASET.')
+    parser.add_argument('--use_checkpoint',
+                        action='store_true',
+                        help="Load a checkpoint.")
+    parser.add_argument('--checkpoint_fn',
+                        type=str,
+                        metavar="FILE",
+                        help="Checkpoint filename.")
+    
     parser.add_argument('--lr', 
                         type=float, 
                         default=1e-3,
@@ -54,42 +74,14 @@ def parse_option():
                         default=1e-5,
                         help='Weight decay used by the \'admaw\' optimizer. Default is 1e-5.'
                        )
-    
-    parser.add_argument('--num_epochs',
-                        type=int,
-                        default=100)
-    
-    parser.add_argument('--use_checkpoint',
-                        action='store_true',
-                        help="Load a checkpoint.")
-    parser.add_argument('--checkpoint_fn',
-                        type=str,
-                        metavar="FILE",
-                        help="Checkpoint filename.")
-    parser.add_argument('--checkpoint_path',
-                        type=str,
-                        default='/thesis/checkpoint', 
-                        help='Path to complete DATASET.')
-    
+
     parser.add_argument('--summary',
                         action='store_true',
                         help="Display the summary of the model.")
-    
-    parser.add_argument('--dataset_path',
-                        type=str,
-                        default='/thesis/classical', 
-                        help='Path to complete DATASET.')
-    
-    parser.add_argument('--batch_size',
-                        type=int,
-                        default=2)
-    
-    parser.add_argument('--with_neck_checkpoint',
-                        action='store_true',
-                        help="Use checkpoint for neck's weight.")
+        
         
     args, unparsed = parser.parse_known_args()
-    config = create_train_config(args)
+    config = create_train_config_A(args)
 
     return args, config
 
@@ -103,12 +95,16 @@ if __name__ == '__main__':
 
     # Check the principal exceptions
     if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
-    if base_config.DATASET.NAME!='coco2017': raise Exception('This script only work with the dataset COCO2017.')
+    if base_config.DATASET.NAME not in AVAILABLE_DATASETS: raise Exception(f'This script only work with the datasets {AVAILABLE_DATASETS}.')
         
-    print(f'[+] backbone used: {base_config.MODEL.BACKBONE.NAME} - neck used: {base_config.MODEL.BIFPN.NAME}')
-    
-    backbone = Backbone(base_config).to(device)
-    backbone.out_channels = base_config.MODEL.BIFPN.NUM_CHANNELS 
+    # Create the backbone and neck model
+    print(f'[+] Configuring backbone and neck models with variables: {base_config.MODEL}')
+    backbone_neck = BackboneNeck(base_config.MODEL)
+    ## freeze the backbone
+    for param in backbone_neck.backbone.parameters():
+        param.requires_grad = False
+    backbone_neck.out_channels = base_config.MODEL.NECK.NUM_CHANNELS
+    print('[+] Ready !')
 
     # MaskRCNN's head config
     print('[+] Building the base model with MaskRCNN head ...')
@@ -127,41 +123,22 @@ if __name__ == '__main__':
     # Create de base model with the FasterRCNN's head
     _num_classes = len(base_config.DATASET.OBJ_LIST)
     print(f'[++] Numbers of classes: {_num_classes}')
-    base_model =torchvision.models.detection.MaskRCNN(backbone,
+    base_model =torchvision.models.detection.MaskRCNN(backbone_neck,
                                                       num_classes=_num_classes,
                                                       rpn_anchor_generator=anchor_generator,
                                                       box_roi_pool=roi_pooler,
                                                       mask_roi_pool=mask_roi_pooler).to(device)
     print('[+] Ready !')
-    
-    # Load the neck checkpoint
-    if hasattr(args, 'with_neck_checkpoint') and args.with_neck_checkpoint:
-        print("[+] Loading neck's weight from checkpoint...")
-        
-        url_t = URL_NECK_WEIGHT.format(f'{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}')
-        print(f"[++] Using the checkpoint {url_t}")
-        checkpoint_neck = torch.hub.load_state_dict_from_url(url_t)
-        
-        if os.path.basename(checkpoint_neck['fn_cfg_model'])!=os.path.basename(args.cfg_model): raise Exception('The \'cfg_model\' used for the training of the neck is different from your actual \'cfg_model\'.')
-    
-        out_neck_check = base_model.backbone.fpn_backbone.load_state_dict(checkpoint_neck['neck_state_dict'], strict=False)
-
-        if len(out_neck_check.unexpected_keys)!=0: 
-            print(f'[++] The unexpected keys was: {out_neck_check.unexpected_keys}')
-        else:
-            print('[++] All keys matched successfully')
-        
-        print(f'[+] Ready !')
 
     # Display the summary of the net
     if args.summary: summary(base_model)
     
     # Load the dataset
     print(f'[+] Loading {base_config.DATASET.NAME} dataset...')
-    print(f'[++] Using batch_size: {base_config.TRAIN.BATCH_SIZE}')
+    print(f'[++] Using batch_size: {base_config.TRAIN.ENV.BATCH_SIZE}')
     
     ## Albumentations to use
-    train_transform = A.Compose([A.Resize(base_config.MODEL.BACKBONE.IMAGE_SIZE, base_config.MODEL.BACKBONE.IMAGE_SIZE),
+    train_transform = A.Compose([A.Resize(base_config.DATASET.IMAGE_SIZE, base_config.DATASET.IMAGE_SIZE),
                                  A.RandomBrightnessContrast(p=0.4),
                                  A.RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.5),
                                  A.InvertImg(p=0.5),
@@ -177,7 +154,7 @@ if __name__ == '__main__':
                                )
     ## Training dataset
     print('[++] Loading training dataset...')
-    training_params = {'batch_size': base_config.TRAIN.BATCH_SIZE,
+    training_params = {'batch_size': base_config.TRAIN.ENV.BATCH_SIZE,
                        'shuffle': True,
                        'drop_last': True,
                        'collate_fn': lambda batch: tuple(zip(*batch)),
@@ -202,21 +179,21 @@ if __name__ == '__main__':
     print(f'[+] Using AdamW optimizer. Configs:{base_config.TRAIN.OPTIM}')
 
     start_epoch = 1
-    end_epoch = base_config.TRAIN.NUM_EPOCHS
+    end_epoch = base_config.TRAIN.ENV.NUM_EPOCHS
     best_loss = 1e5
     global_steps = 0
 
-    ## Load the checkpoint if is need it
-    if base_config.TRAIN.USE_CHECKPOINT:
-        print('[+] Loading checkpoint...')
-        checkpoint = torch.load(os.path.join(args.checkpoint_path, base_config.TRAIN.CHECKPOINT_PATH))
+#     ## Load the checkpoint if is need it
+#     if base_config.TRAIN.USE_CHECKPOINT:
+#         print('[+] Loading checkpoint...')
+#         checkpoint = torch.load(os.path.join(args.checkpoint_path, base_config.TRAIN.CHECKPOINT_PATH))
         
-        base_model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+#         base_model.load_state_dict(checkpoint['model_state_dict'])
+#         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-        best_loss = checkpoint['best_loss']
-        start_epoch = checkpoint['epoch'] + 1
-        print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
+#         best_loss = checkpoint['best_loss']
+#         start_epoch = checkpoint['epoch'] + 1
+#         print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
 
     # Train the model
     base_model.train()
@@ -228,11 +205,12 @@ if __name__ == '__main__':
         loss_l = []
         with tqdm(training_loader, unit=" batch") as tepoch:
             for images, targets in tepoch:
-
+                
+                if None in images and None in targets: continue
+                if not all(('boxes' in d.keys() and 'labels' in d.keys() and 'masks' in d.keys()) for d in targets): continue
+                
                 images = [image.to(device) for image in images]
                 targets = [{k: v.to(device) for k, v in t.items() if (k=='boxes' or k=='labels' or k=='masks')} for t in targets]
-
-                if not all(('boxes' in d.keys() and 'labels' in d.keys() and 'masks' in d.keys()) for d in targets): continue
                 
                 optimizer.zero_grad(set_to_none=True)
                 
@@ -264,19 +242,19 @@ if __name__ == '__main__':
                 
                 global_steps+=1
 
-        if loss_median < best_loss:
-            best_loss = loss_median
+#         if loss_median < best_loss:
+#             best_loss = loss_median
 
-            torch.save({'model_state_dict': base_model.state_dict(),
-                        'neck_state_dict': base_model.backbone.fpn_backbone.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'epoch': epoch,
-                        'best_loss': best_loss,
-                        'fn_cfg_dataset': str(args.cfg_dataset), 
-                        'fn_cfg_model': str(args.cfg_model),
-                        'fpn_type': base_config.MODEL.BIFPN.TYPE,
-                       },
-                       os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_B1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
+#             torch.save({'model_state_dict': base_model.state_dict(),
+#                         'neck_state_dict': base_model.backbone.fpn_backbone.state_dict(),
+#                         'optimizer_state_dict': optimizer.state_dict(),
+#                         'epoch': epoch,
+#                         'best_loss': best_loss,
+#                         'fn_cfg_dataset': str(args.cfg_dataset), 
+#                         'fn_cfg_model': str(args.cfg_model),
+#                         'fpn_type': base_config.MODEL.BIFPN.TYPE,
+#                        },
+#                        os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_B1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
     
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))

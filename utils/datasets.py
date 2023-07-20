@@ -127,45 +127,49 @@ class CocoDetectionV2(CocoDetection):
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
-        id = self.ids_n[index]
-        
-        image = self._load_image(id)
-        h, w, _ = image.shape
-        
-        target = self._load_target(id)
-        
-        n_target = dict()
-        for t in target:
-            for k,v in t.items():
-                if k not in n_target: n_target[k] = []
-                n_target[k].append(v)
-        
-        n_target["bbox"] = torch.as_tensor(n_target["bbox"], dtype=torch.float32)
-        n_target["bbox"] = box_convert(n_target["bbox"], in_fmt='xywh', out_fmt='xyxy')
-        
-        n_target["masks"] = self._convert_coco_poly_to_mask(n_target['segmentation'], h, w)
-        del n_target['segmentation']
+        try:
+            id = self.ids_n[index]
 
-        f_target = dict()
-        if self.transform is not None:
-            if not isinstance(self.transform, A.core.composition.Compose): RuntimeError("[+] The transform compose must by an Albumentations's type.!")
-            transformed = self.transform(image=np.asarray(image), 
-                                         bboxes=n_target['bbox'],
-                                         masks=[m.numpy() for m in n_target['masks']],
-                                         category_ids=n_target['category_id'])
-            image = transformed['image']
-            f_target["masks"] = torch.stack(transformed['masks'])
-            f_target["boxes"] = torch.as_tensor(transformed['bboxes'], dtype=torch.float32)
-            f_target["labels"] = torch.as_tensor(transformed['category_ids'], dtype=torch.int64)
-        else:
-            f_target["masks"] = n_target['masks']
-            f_target["boxes"] = torch.as_tensor(n_target['bbox'], dtype=torch.float32)
-            f_target["labels"] = torch.as_tensor(n_target['category_id'], dtype=torch.int64)
-        f_target["image_id"] = torch.tensor([index])
-        f_target["area"] = torch.as_tensor(n_target['area'])
-        f_target["iscrowd"] = torch.as_tensor(n_target['iscrowd'])
+            image = self._load_image(id)
+            h, w, _ = image.shape
 
-        return image, f_target
+            target = self._load_target(id)
+
+            n_target = dict()
+            for t in target:
+                for k,v in t.items():
+                    if k not in n_target: n_target[k] = []
+                    n_target[k].append(v)
+
+            n_target["bbox"] = torch.as_tensor(n_target["bbox"], dtype=torch.float32)
+            n_target["bbox"] = box_convert(n_target["bbox"], in_fmt='xywh', out_fmt='xyxy')
+
+            n_target["masks"] = self._convert_coco_poly_to_mask(n_target['segmentation'], h, w)
+            del n_target['segmentation']
+
+            f_target = dict()
+            if self.transform is not None:
+                if not isinstance(self.transform, A.core.composition.Compose): RuntimeError("[+] The transform compose must by an Albumentations's type.!")
+                transformed = self.transform(image=np.asarray(image), 
+                                             bboxes=n_target['bbox'],
+                                             masks=[m.numpy() for m in n_target['masks']],
+                                             category_ids=n_target['category_id'])
+                image = transformed['image']
+                f_target["masks"] = torch.stack(transformed['masks'])
+                f_target["boxes"] = torch.as_tensor(transformed['bboxes'], dtype=torch.float32)
+                f_target["labels"] = torch.as_tensor(transformed['category_ids'], dtype=torch.int64)
+            else:
+                f_target["masks"] = n_target['masks']
+                f_target["boxes"] = torch.as_tensor(n_target['bbox'], dtype=torch.float32)
+                f_target["labels"] = torch.as_tensor(n_target['category_id'], dtype=torch.int64)
+            f_target["image_id"] = torch.tensor([index])
+            f_target["area"] = torch.as_tensor(n_target['area'])
+            f_target["iscrowd"] = torch.as_tensor(n_target['iscrowd'])
+
+            return image, f_target
+
+        except:
+            return None, None
 
     def __len__(self) -> int:
         return len(self.ids_n)

@@ -3,7 +3,6 @@ import os
 from tqdm import tqdm
 from datetime import datetime
 import numpy as np
-from omegaconf import OmegaConf
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -94,7 +93,7 @@ if __name__ == '__main__':
     
     # Check the principal exceptions
     if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
-    if base_config.DATASET.NAME not in AVAILABLE_DATASETS: raise Exception('This script only work with the dataset VOC2012.')
+    if base_config.DATASET.NAME not in AVAILABLE_DATASETS: raise Exception(f'This script only work with the datasets {AVAILABLE_DATASETS}.')
 
     # Create the backbone and neck model
     print(f'[+] Configuring backbone and neck models with variables: {base_config.MODEL}')
