@@ -1,0 +1,8 @@
+BACKBONE:
+    MODEL_NAME: 'internimage_t'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    MODEL_NAME: 'fpn'
+    IN_CHANNELS: [64, 128, 256, 512]
+    NUM_CHANNELS: 256
+    NUM_LAYERS: 5

@@ -1,0 +1,8 @@
+BACKBONE:
+    MODEL_NAME: 'convnext_tiny'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    MODEL_NAME: 'cabifpn'
+    IN_CHANNELS: [96, 192, 384, 768]
+    NUM_CHANNELS: 256
+    NUM_LAYERS: 5
