@@ -12,6 +12,8 @@ from torchinfo import summary
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+from lion_pytorch import Lion
+
 from model.builder import BackboneNeck, AVAILABLE_NECKS, AVAILABLE_BACKBONES
 from config.init import create_train_config_A
 from utils.datasets import VOCDetectionV2, CocoDetectionV2
@@ -51,14 +53,14 @@ def parse_option():
     parser.add_argument('--batch_size',
                         type=int,
                         default=2)
-    
+
+    parser.add_argument('--use_checkpoint',
+                        action='store_true',
+                        help="Load a checkpoint.")
     parser.add_argument('--checkpoint_path',
                         type=str,
                         default='/thesis/checkpoint', 
                         help='Path to complete DATASET.')
-    parser.add_argument('--use_checkpoint',
-                        action='store_true',
-                        help="Load a checkpoint.")
     parser.add_argument('--checkpoint_fn',
                         type=str,
                         metavar="FILE",
@@ -67,18 +69,22 @@ def parse_option():
     parser.add_argument('--lr', 
                         type=float, 
                         default=1e-3,
-                        help='Learning rate used by the \'admaw\' optimizer. Default is 1e-3.'
+                        help='Learning rate used by the \'adamw\' optimizer. Default is 1e-3. For \'lion\' its recommend 2e-4.'
                        )
     parser.add_argument('--wd', 
                         type=float, 
                         default=1e-5,
-                        help='Weight decay used by the \'admaw\' optimizer. Default is 1e-5.'
+                        help='Weight decay used by the \'adamw\' optimizer. Default is 1e-5. For \'lion\' its recommend 1e-2.'
+                       )
+    parser.add_argument('--optimizer', 
+                        type=str, 
+                        default='adamw',
+                        help='The optimizer to use. The available opts are: \'adamw\' or \'lion\'. By default its \'adamw\' .'
                        )
 
     parser.add_argument('--summary',
                         action='store_true',
                         help="Display the summary of the model.")
-        
         
     args, unparsed = parser.parse_known_args()
     config = create_train_config_A(args)
@@ -123,11 +129,11 @@ if __name__ == '__main__':
     # Create de base model with the FasterRCNN's head
     _num_classes = len(base_config.DATASET.OBJ_LIST)
     print(f'[++] Numbers of classes: {_num_classes}')
-    base_model =torchvision.models.detection.MaskRCNN(backbone_neck,
-                                                      num_classes=_num_classes,
-                                                      rpn_anchor_generator=anchor_generator,
-                                                      box_roi_pool=roi_pooler,
-                                                      mask_roi_pool=mask_roi_pooler).to(device)
+    base_model = torchvision.models.detection.MaskRCNN(backbone_neck,
+                                                       num_classes=_num_classes,
+                                                       rpn_anchor_generator=anchor_generator,
+                                                       box_roi_pool=roi_pooler,
+                                                       mask_roi_pool=mask_roi_pooler).to(device)
     print('[+] Ready !')
 
     # Display the summary of the net
@@ -146,8 +152,8 @@ if __name__ == '__main__':
                                  A.GaussNoise(p=0.4),
                                  A.Flip(p=0.4),
                                  A.RandomRotate90(p=0.4),
-                                 A.Normalize(mean=[0.485, 0.456, 0.406],
-                                             std=[0.229, 0.224, 0.225],
+                                 A.Normalize(mean=base_config.DATASET.MEAN,
+                                             std=base_config.DATASET.STD,
                                              max_pixel_value=255.0),
                                  ToTensorV2()
                                 ],bbox_params=A.BboxParams(format='pascal_voc', label_fields=['category_ids'])
@@ -174,19 +180,28 @@ if __name__ == '__main__':
     ## Cofig the optimizer
     params = [p for p in base_model.parameters() if p.requires_grad]
 
-    optimizer = torch.optim.AdamW(params, lr=base_config.TRAIN.OPTIM.BASE_LR,
+    if args.optimizer == 'adamw':
+        optimizer = torch.optim.AdamW(params, lr=base_config.TRAIN.OPTIM.BASE_LR,
                                   weight_decay=base_config.TRAIN.OPTIM.WEIGHT_DECAY)
-    print(f'[+] Using AdamW optimizer. Configs:{base_config.TRAIN.OPTIM}')
+        print(f'[+] Using AdamW optimizer. Configs:{base_config.TRAIN.OPTIM}')
+    elif args.optimizer == 'lion':
+        optimizer = Lion(params, lr=base_config.TRAIN.OPTIM.BASE_LR,
+                         weight_decay=base_config.TRAIN.OPTIM.WEIGHT_DECAY)
+        print(f'[+] Using Lion optimizer. Configs:{base_config.TRAIN.OPTIM}')
+    else:
+        raise Exception("The optimizer selected doesn't exist. The available optis are: \'adamw\' or \'lion\'.")  
 
     start_epoch = 1
     end_epoch = base_config.TRAIN.ENV.NUM_EPOCHS
     best_loss = 1e5
     global_steps = 0
 
+#     print(base_config.TRAIN.ENV)
 #     ## Load the checkpoint if is need it
-#     if base_config.TRAIN.USE_CHECKPOINT:
+#     if base_config.TRAIN.ENV.CHECKPOINT_USE:
 #         print('[+] Loading checkpoint...')
-#         checkpoint = torch.load(os.path.join(args.checkpoint_path, base_config.TRAIN.CHECKPOINT_PATH))
+#         checkpoint = torch.load(os.path.join(base_config.TRAIN.ENV.CHECKPOINT_PATH,
+#                                              base_config.TRAIN.ENV.CHECKPOINT_FN))
         
 #         base_model.load_state_dict(checkpoint['model_state_dict'])
 #         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -242,20 +257,19 @@ if __name__ == '__main__':
                 
                 global_steps+=1
 
-#         if loss_median < best_loss:
-#             best_loss = loss_median
+        if loss_median < best_loss:
+            best_loss = loss_median
 
-#             torch.save({'model_state_dict': base_model.state_dict(),
-#                         'neck_state_dict': base_model.backbone.fpn_backbone.state_dict(),
-#                         'optimizer_state_dict': optimizer.state_dict(),
-#                         'epoch': epoch,
-#                         'best_loss': best_loss,
-#                         'fn_cfg_dataset': str(args.cfg_dataset), 
-#                         'fn_cfg_model': str(args.cfg_model),
-#                         'fpn_type': base_config.MODEL.BIFPN.TYPE,
-#                        },
-#                        os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_B1_{base_config.MODEL.BIFPN.TYPE}_{base_config.MODEL.BACKBONE.NAME}_{base_config.MODEL.BIFPN.NAME}_{epoch}.pth'))
-    
+            torch.save({'model_state_dict': base_model.state_dict(),
+                        'neck_state_dict': base_model.backbone.neck.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'epoch': epoch,
+                        'best_loss': best_loss,
+                        'fn_cfg_dataset': str(args.cfg_dataset), 
+                        'fn_cfg_model': str(args.cfg_model),
+                       },
+                       os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_B_{base_config.MODEL.BACKBONE.MODEL_NAME}_{base_config.MODEL.NECK.MODEL_NAME}_{epoch}.pth'))
+
     end_t = datetime.now()
     print('[+] Ready, the train phase took:', (end_t - start_t))
     
