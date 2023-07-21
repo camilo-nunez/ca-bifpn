@@ -65,11 +65,15 @@ Available `cfg_model` configs files:
 
 
 ### Training MASK-RCNN A.K.A. `train_B`
-
-
-
+Local
 ```
-python train_B1.py --cfg_dataset config/files/dataset/coco.yaml --cfg_model config/files/model/00_fpn_5l_internimage_t_1k_224.yaml --fpn_type bs --num_epochs 100 --batch_size 4 --with_neck_checkpoint
-python train_B1.py --cfg_dataset config/files/dataset/coco.yaml --cfg_model config/files/model/01_fpn_5l_internimage_s_1k_224.yaml --fpn_type bs --num_epochs 100 --batch_size 4 --with_neck_checkpoint
-python train_B1.py --cfg_dataset config/files/dataset/coco.yaml --cfg_model config/files/model/02_fpn_5l_internimage_b_1k_224.yaml --fpn_type bs --num_epochs 100 --batch_size 4 --with_neck_checkpoint
+python train_B.py --cfg_model config/files/model/00_internimage_t_fpn.yaml --cfg_dataset config/files/dataset/coco.yaml --summary
 ```
+
+server universidad
+```
+python train_B.py --cfg_model config/files/model/10_internimage_s_fpn.yaml --cfg_dataset config/files/dataset/coco.yaml --summary --dataset_path /chi2ad/thesis/datasets/ --checkpoint_path /chi2ad/thesis/checkpoint/ --batch_size 8
+```
+
+# Acknowledgements
+A heartfelt and special thanks to the ANID Fondef IT21I0019 group and the Chi2AD Datacentre for generously providing the computational resources that made this project possible.
