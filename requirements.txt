@@ -8,3 +8,4 @@ torchinfo
 ujson
 grad-cam
 lion-pytorch
+torchmetrics
