@@ -4,10 +4,12 @@ from tqdm import tqdm
 from datetime import datetime
 import numpy as np
 from omegaconf import OmegaConf
+from pprint import pprint
 
 import torch
 import torchvision
 from torchinfo import summary
+from torchmetrics.detection import MeanAveragePrecision
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -145,13 +147,7 @@ if __name__ == '__main__':
     print('[+] Starting validation ...')
     start_t = datetime.now()
 
-    from torchmetrics.detection import MeanAveragePrecision
-    from pprint import pprint
-    
     metric = MeanAveragePrecision(box_format="xyxy", compute_with_cache=False, compute_on_cpu=True)
-    
-    h_pred = []
-    h_targets = []
     
     for batch_idx, sample in enumerate(tqdm(val_loader)):
         images, targets = sample
