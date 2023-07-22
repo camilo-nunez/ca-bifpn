@@ -15,8 +15,8 @@ from albumentations.pytorch import ToTensorV2
 from lion_pytorch import Lion
 
 from model.builder import BackboneNeck, AVAILABLE_NECKS, AVAILABLE_BACKBONES
-from config.init import create_train_config_A
-from utils.datasets import VOCDetectionV2, CocoDetectionV2
+from config.init import create_train_config
+from utils.datasets import CocoDetectionV2
 
 AVAILABLE_DATASETS = ['coco2017']
 
@@ -87,7 +87,7 @@ def parse_option():
                         help="Display the summary of the model.")
         
     args, unparsed = parser.parse_known_args()
-    config = create_train_config_A(args)
+    config = create_train_config(args)
 
     return args, config
 
@@ -126,7 +126,7 @@ if __name__ == '__main__':
                                                          output_size=14,
                                                          sampling_ratio=2)
 
-    # Create de base model with the FasterRCNN's head
+    # Create de base model with the MaskRCNN's head
     _num_classes = len(base_config.DATASET.OBJ_LIST)
     print(f'[++] Numbers of classes: {_num_classes}')
     base_model = torchvision.models.detection.MaskRCNN(backbone_neck,
