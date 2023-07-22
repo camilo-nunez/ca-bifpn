@@ -77,7 +77,7 @@ def default_config():
 
     return _C
 
-def create_train_config_A(args):
+def create_train_config(args):
     
     model_conf = OmegaConf.load(args.cfg_model)
     dataset_conf = OmegaConf.load(args.cfg_dataset)
@@ -108,3 +108,29 @@ def create_train_config_A(args):
         base_config.TRAIN.OPTIM.WEIGHT_DECAY = args.wd
 
     return base_config
+
+def create_val_config(args):
+    
+    import torch
+    
+    print('[+] Loading checkpoint...')
+    checkpoint = torch.load(os.path.join(args.path_checkpoint))
+    print('[+] Ready !')
+    
+    print('[+] Preparing base configs...')
+    
+    model_conf = OmegaConf.load(checkpoint['fn_cfg_model'])
+    dataset_conf = OmegaConf.load(checkpoint['fn_cfg_dataset'])
+    
+    base_config = default_config()
+    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_conf)
+    base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
+    
+    if hasattr(args, 'batch_size') and args.batch_size:
+        base_config.TRAIN.ENV.BATCH_SIZE = args.batch_size
+    if hasattr(args, 'dataset_path') and args.dataset_path:
+        base_config.DATASET.PATH = args.dataset_path
+    
+    print('[+] Ready !')
+    
+    return base_config, checkpoint
