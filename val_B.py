@@ -1,5 +1,6 @@
 import argparse
 import os
+from tqdm import tqdm
 from datetime import datetime
 import numpy as np
 from omegaconf import OmegaConf
@@ -11,19 +12,20 @@ from torchinfo import summary
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-from model.builder import BackboneNeck, AVAILABLE_NECKS, AVAILABLE_BACKBONES
+from model.builder import BackboneNeck
 from config.init import create_val_config
 from utils.datasets import CocoDetectionV2
-from utils.coco_eval import evaluateCOCO
-
-## Customs configs
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# from utils.vision.engine import evaluate
 
 AVAILABLE_DATASETS = ['coco2017']
 
+## Customs configs
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.backends.cudnn.deterministic = True
+
 def parse_option():
     parser = argparse.ArgumentParser(
-        'Thesis cnunezf validation Mask-RCNN script - A', add_help=True)
+        'Thesis cnunezf validation Mask-RCNN script - B', add_help=True)
     
     parser.add_argument('--path_checkpoint',
                         type=str,
@@ -42,7 +44,7 @@ def parse_option():
     
     parser.add_argument('--batch_size',
                         type=int,
-                        default=2)
+                        default=1)
 
     args, unparsed = parser.parse_known_args()
     config, checkpoint = create_val_config(args)
@@ -55,7 +57,7 @@ if __name__ == '__main__':
     args, base_config, checkpoint = parse_option()
     
     # Check the principal exceptions
-    if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
+    if not torch.cuda.is_available(): raise Exception('This script is only available to run the inference mode in GPU.')
     if base_config.DATASET.NAME not in AVAILABLE_DATASETS: raise Exception(f'This script only work with the datasets {AVAILABLE_DATASETS}.')
         
     # Create the backbone and neck model
@@ -85,7 +87,7 @@ if __name__ == '__main__':
     _num_classes = len(base_config.DATASET.OBJ_LIST)
     print(f'[++] Numbers of classes: {_num_classes}')
     base_model = torchvision.models.detection.MaskRCNN(backbone_neck,
-                                                       num_classes=_num_classes,
+                                                       num_classes=_num_classes + 1, # +1 = background
                                                        rpn_anchor_generator=anchor_generator,
                                                        box_roi_pool=roi_pooler,
                                                        mask_roi_pool=mask_roi_pooler).to(device)
@@ -107,14 +109,15 @@ if __name__ == '__main__':
     print(f'[++] Using batch_size: {base_config.TRAIN.ENV.BATCH_SIZE}')
     
     ## Albumentations to use
-    train_transform = A.Compose([A.Resize(base_config.DATASET.IMAGE_SIZE, base_config.DATASET.IMAGE_SIZE),
-                                 A.Normalize(mean=base_config.DATASET.MEAN,
+    val_transform = A.Compose([A.Resize(base_config.DATASET.IMAGE_SIZE, base_config.DATASET.IMAGE_SIZE),
+                               A.Normalize(mean=base_config.DATASET.MEAN,
                                              std=base_config.DATASET.STD,
                                              max_pixel_value=255.0),
-                                 ToTensorV2()
-                                ],bbox_params=A.BboxParams(format='pascal_voc', label_fields=['category_ids'])
-                               )
-    ## Training dataset
+                               ToTensorV2()
+                              ],bbox_params=A.BboxParams(format='pascal_voc', label_fields=['category_ids'])
+                             )
+
+    ## Validation dataset
     print('[++] Loading validation dataset...')
     val_params = {'batch_size': base_config.TRAIN.ENV.BATCH_SIZE,
                    'shuffle': False,
@@ -123,20 +126,49 @@ if __name__ == '__main__':
                    'num_workers': 4,
                    'pin_memory':True,
                   }
-
-    val_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/train2017'),
-                                  annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_train2017.json'),
-                                  transform = train_transform)
+    
+    val_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/val2017'),
+                                  annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_val2017.json'),
+                                  transform = val_transform
+                                 )
 
     val_loader = torch.utils.data.DataLoader(val_dataset, **val_params)
     print('[++] Ready !')
     print('[+] Ready !')
     
     # Validation model phase
-    base_model.eval()
+    torch.set_num_threads(1)
+    cpu_device = torch.device("cpu")
     
+    base_model.eval()
+
     print('[+] Starting validation ...')
     start_t = datetime.now()
-    evaluateCOCO(base_model, val_loader, device=device)
+
+    from torchmetrics.detection import MeanAveragePrecision
+    from pprint import pprint
+    
+    metric = MeanAveragePrecision(box_format="xyxy", compute_with_cache=False, compute_on_cpu=True)
+    
+    h_pred = []
+    h_targets = []
+    
+    for batch_idx, sample in enumerate(tqdm(val_loader)):
+        images, targets = sample
+        
+        if None in images and None in targets: continue
+        if not all(('boxes' in d.keys() and 'labels' in d.keys() and 'masks' in d.keys()) for d in targets): continue
+
+        images = [image.to(device) for image in images]
+        preds = base_model(images)
+        preds = [{k: v.detach().to(cpu_device) for k, v in t.items()} for t in preds]
+        
+        torch.cuda.synchronize()
+        
+        metric.update(preds, targets)
+        
     end_t = datetime.now()
+    
+    pprint(metric.compute())
+    
     print('[+] Ready, the validation phase took:', (end_t - start_t))
