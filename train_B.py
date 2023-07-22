@@ -23,7 +23,6 @@ AVAILABLE_DATASETS = ['coco2017']
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 def parse_option():
     parser = argparse.ArgumentParser(
         'Thesis cnunezf training model + Mask-RCNN script - B', add_help=True)
@@ -130,7 +129,7 @@ if __name__ == '__main__':
     _num_classes = len(base_config.DATASET.OBJ_LIST)
     print(f'[++] Numbers of classes: {_num_classes}')
     base_model = torchvision.models.detection.MaskRCNN(backbone_neck,
-                                                       num_classes=_num_classes,
+                                                       num_classes=_num_classes + 1, # +1 = background
                                                        rpn_anchor_generator=anchor_generator,
                                                        box_roi_pool=roi_pooler,
                                                        mask_roi_pool=mask_roi_pooler).to(device)
