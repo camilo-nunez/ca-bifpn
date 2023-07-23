@@ -155,11 +155,11 @@ class CocoDetectionV2(CocoDetection):
                                              masks=[m.numpy() for m in n_target['masks']],
                                              category_ids=n_target['category_id'])
                 image = transformed['image']
-                f_target["masks"] = torch.stack(transformed['masks'])
+                f_target["masks"] = torch.stack(transformed['masks']).type(torch.uint8)
                 f_target["boxes"] = torch.as_tensor(transformed['bboxes'], dtype=torch.float32)
                 f_target["labels"] = torch.as_tensor(transformed['category_ids'], dtype=torch.int64)
             else:
-                f_target["masks"] = n_target['masks']
+                f_target["masks"] = n_target['masks'].type(torch.uint8)
                 f_target["boxes"] = torch.as_tensor(n_target['bbox'], dtype=torch.float32)
                 f_target["labels"] = torch.as_tensor(n_target['category_id'], dtype=torch.int64)
             f_target["image_id"] = torch.tensor([index])
