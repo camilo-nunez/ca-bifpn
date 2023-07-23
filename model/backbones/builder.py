@@ -9,6 +9,8 @@ from typing import List
 import os
 import torch.nn as nn
 
+DIRNAME = os.path.dirname(__file__)
+
 TIMM_AVAILABLE_MODELS = ['convnext_tiny',
                          'convnext_small',
                          'convnext_base',
@@ -17,16 +19,16 @@ TIMM_AVAILABLE_MODELS = ['convnext_tiny',
                          'tf_efficientnetv2_l',
                         ]
 
-INTERNIMAGE_AVAILABLE_MODELS = {'internimage_t':'model/backbones/internimage/configs/00_internimage_t_1k_224.yaml',
-                                'internimage_s':'model/backbones/internimage/configs/01_internimage_s_1k_224.yaml',
-                                'internimage_b':'model/backbones/internimage/configs/02_internimage_b_1k_224.yaml'}
+INTERNIMAGE_AVAILABLE_MODELS = {'internimage_t':'./internimage/configs/00_internimage_t_1k_224.yaml',
+                                'internimage_s':'./internimage/configs/01_internimage_s_1k_224.yaml',
+                                'internimage_b':'./internimage/configs/02_internimage_b_1k_224.yaml'}
 
 AVAILABLE_BACKBONES = list(INTERNIMAGE_AVAILABLE_MODELS.keys()) + TIMM_AVAILABLE_MODELS
 
 # Create InternImage
 def builder_im(model_name: str, out_indices=(0, 1, 2, 3)):
-
-    config = OmegaConf.load(os.path.join(INTERNIMAGE_AVAILABLE_MODELS[model_name]))
+    
+    config = OmegaConf.load(os.path.join(DIRNAME, INTERNIMAGE_AVAILABLE_MODELS[model_name]))
 
     model = InternImage(norm_layer='LN',
                         drop_path_rate=config.DROP_PATH_RATE,
@@ -43,14 +45,8 @@ def builder_im(model_name: str, out_indices=(0, 1, 2, 3)):
                        )
     checkpoint = load_state_dict_from_url(url=config.URL, map_location="cpu")
     out_n = model.load_state_dict(checkpoint['model'], strict=False)
-    
-#     if len(out_n.unexpected_keys)!=0: print(f'[+] The unexpected keys for internimage was: {out_n.unexpected_keys}')
-    
-#     for param in model.parameters():
-#         param.requires_grad = False
 
     return model
-
 
 # General builder
 class Backbone(nn.Module):

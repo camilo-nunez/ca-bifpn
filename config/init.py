@@ -4,6 +4,8 @@ from omegaconf import OmegaConf
 
 import os
 
+DIRNAME = os.path.dirname(__file__)
+
 @dataclass
 class BACKBONE:
     MODEL_NAME: str = MISSING
@@ -131,6 +133,27 @@ def create_val_config(args):
     if hasattr(args, 'dataset_path') and args.dataset_path:
         base_config.DATASET.PATH = args.dataset_path
     
+    print('[+] Ready !')
+    
+    return base_config, checkpoint
+
+def create_ntbk_config(checkpoint_path: str):
+    
+    import torch
+    
+    print('[+] Loading checkpoint...')
+    checkpoint = torch.load(os.path.join(checkpoint_path))
+    print('[+] Ready !')
+    
+    print('[+] Preparing base configs...')
+
+    model_conf = OmegaConf.load(os.path.join(DIRNAME, 'files/model/', os.path.basename(checkpoint['fn_cfg_model'])))
+    dataset_conf = OmegaConf.load(os.path.join(DIRNAME, 'files/dataset/', os.path.basename(checkpoint['fn_cfg_dataset'])))
+    
+    base_config = default_config()
+    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_conf)
+    base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
+
     print('[+] Ready !')
     
     return base_config, checkpoint
