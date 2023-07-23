@@ -147,24 +147,39 @@ if __name__ == '__main__':
     print('[+] Starting validation ...')
     start_t = datetime.now()
 
-    metric = MeanAveragePrecision(box_format="xyxy", compute_with_cache=False, compute_on_cpu=True)
+    
+    from torch import BoolTensor, IntTensor, Tensor
+    
+    
+    metric_segm = MeanAveragePrecision(box_format="xyxy", iou_type = "segm")
+    metric_bbox = MeanAveragePrecision(box_format="xyxy",  iou_type = "bbox")
     
     for batch_idx, sample in enumerate(tqdm(val_loader)):
         images, targets = sample
-        
+
         if None in images and None in targets: continue
         if not all(('boxes' in d.keys() and 'labels' in d.keys() and 'masks' in d.keys()) for d in targets): continue
 
         images = [image.to(device) for image in images]
         preds = base_model(images)
         preds = [{k: v.detach().to(cpu_device) for k, v in t.items()} for t in preds]
-        
+
         torch.cuda.synchronize()
         
-        metric.update(preds, targets)
+        for p in preds:
+            p['labels'] = p['labels'].type(torch.IntTensor)
+            p['masks'] = p['masks'].type(torch.BoolTensor).squeeze(1)
         
+        for t in targets:
+            t['labels'] = t['labels'].type(torch.IntTensor)
+            t['masks'] = t['masks'].type(torch.BoolTensor)
+
+        metric_segm.update(preds, targets)
+        metric_bbox.update(preds, targets)
+
     end_t = datetime.now()
-    
-    pprint(metric.compute())
-    
+
+    pprint(metric_segm.compute())
+    pprint(metric_bbox.compute())
+
     print('[+] Ready, the validation phase took:', (end_t - start_t))
