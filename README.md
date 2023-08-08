@@ -74,6 +74,3 @@ server universidad
 ```
 python train_B.py --cfg_model config/files/model/10_internimage_s_fpn.yaml --cfg_dataset config/files/dataset/coco.yaml --summary --dataset_path /chi2ad/thesis/datasets/ --checkpoint_path /chi2ad/thesis/checkpoint/ --batch_size 8
 ```
-
-# Acknowledgements
-A heartfelt and special thanks to the ANID Fondef IT21I0019 group and the Chi2AD Datacentre for generously providing the computational resources that made this project possible.
