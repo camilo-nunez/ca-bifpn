@@ -28,14 +28,21 @@ torch.backends.cudnn.benchmark = False
 
 def parse_option():
     parser = argparse.ArgumentParser(
-        'Thesis cnunezf training model + Mask-RCNN script - B', add_help=True)
+        'Thesis cnunezf training model + Mask-RCNN script', add_help=True)
     
-    parser.add_argument('--cfg_model',
+    parser.add_argument('--cfg_model_backbone',
                         type=str,
                         required=True,
                         metavar="FILE",
-                        help='Path to MODEL config file. Must be a YAML file.'
+                        help='Path to BACKBONE config file. Must be a YAML file.'
                        )
+    parser.add_argument('--cfg_model_neck',
+                        type=str,
+                        required=True,
+                        metavar="FILE",
+                        help='Path to NECK config file. Must be a YAML file.'
+                       )
+    
     
     parser.add_argument('--cfg_dataset',
                         type=str,
