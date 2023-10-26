@@ -80,12 +80,13 @@ def default_config():
     return _C
 
 def create_train_config(args):
+    model_backbone_conf = OmegaConf.load(args.cfg_model_backbone)
+    model_neck_conf = OmegaConf.load(args.cfg_model_neck)
     
-    model_conf = OmegaConf.load(args.cfg_model)
     dataset_conf = OmegaConf.load(args.cfg_dataset)
     base_config = default_config()
     
-    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_conf)
+    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf)
     
     base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
     if hasattr(args, 'dataset_path') and args.dataset_path:

@@ -1,0 +1,4 @@
+NECK:
+    MODEL_NAME: 'cabifpn'
+    NUM_CHANNELS: 256
+    NUM_LAYERS: 5

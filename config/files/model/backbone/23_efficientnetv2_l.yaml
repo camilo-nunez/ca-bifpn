@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'efficientnetv2_l'
+    OUT_INDICES: [1, 2, 3, 4]
+NECK:
+    IN_CHANNELS: [64, 96, 224, 640]
