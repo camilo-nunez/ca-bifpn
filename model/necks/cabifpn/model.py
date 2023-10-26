@@ -5,26 +5,42 @@ from .utils import MaxPool2dStaticSamePadding, Conv2dStaticSamePadding
 
 from collections import OrderedDict
 
+class GRN(nn.Module):
+    """ GRN (Global Response Normalization) layer
+    """
+    def __init__(self, dim):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.zeros(1, dim, 1, 1))
+        self.beta = nn.Parameter(torch.zeros(1, dim, 1, 1))
+
+    def forward(self, x):
+        Gx = torch.norm(x, p=2, dim=(2,3), keepdim=True)
+        Nx = Gx / (Gx.mean(dim=-1, keepdim=True) + 1e-6)
+        return self.gamma * (x * Nx) + self.beta + x
+
 # Context Agregators
 class LocalContextAggregator(nn.Module):
     
     def __init__(self,
                  channels,
-                 r = 2,
+                 r = 4,
                 ):
         super().__init__()
         inter_channels = int(channels // r)
         
-        self.conv = nn.Sequential(nn.Conv2d(channels, inter_channels, kernel_size=1, bias=False),
-                                  nn.InstanceNorm2d(inter_channels, affine=True),
-                                  nn.GELU(),
-                                  nn.Conv2d(inter_channels, channels, kernel_size=1, bias=False),
-                                  nn.InstanceNorm2d(channels, affine=True),
-                                  )
+        self.point_conv1 = nn.Conv2d(channels, inter_channels, kernel_size=1, bias=False)
+        self.norm = nn.GroupNorm(2, inter_channels)
+        self.act = nn.GELU()
+        self.point_conv2 = nn.Conv2d(inter_channels, channels, kernel_size=1, bias=False)
+        
         self.sigmoid  = nn.Sigmoid()
         
     def forward(self, x):
-        x_hat = self.conv(x)
+        x_hat = self.point_conv1(x)
+        x_hat = self.norm(x_hat)
+        x_hat = self.act(x_hat)
+        x_hat = self.point_conv2(x_hat)
+        
         s =  self.sigmoid(x_hat)
 
         return torch.mul(x, s)
@@ -33,22 +49,27 @@ class GlobalContextAggregator(nn.Module):
     
     def __init__(self,
                  channels,
-                 r = 2,
+                 r = 4,
                 ):
         super().__init__()
         inter_channels = int(channels // r)
         
-        self.conv = nn.Sequential(nn.AdaptiveAvgPool2d(1),
-                                  nn.Conv2d(channels, inter_channels, kernel_size=1, bias=False),
-                                  nn.BatchNorm2d(inter_channels),
-                                  nn.GELU(),
-                                  nn.Conv2d(inter_channels, channels, kernel_size=1, bias=False),
-                                  nn.BatchNorm2d(channels),
-                                 )        
+#         self.gap = nn.AvgPool2d(1)
+        self.gap = GRN(channels)
+        self.point_conv1 = nn.Conv2d(channels, inter_channels, kernel_size=1, bias=False)
+        self.norm = nn.GroupNorm(2, inter_channels)
+        self.act = nn.GELU()
+        self.point_conv2 = nn.Conv2d(inter_channels, channels, kernel_size=1, bias=False)
+
         self.sigmoid  = nn.Sigmoid()
         
     def forward(self, x):
-        x_hat = self.conv(x)
+        x_hat = self.gap(x)
+        x_hat = self.point_conv1(x_hat)
+        x_hat = self.norm(x_hat)
+        x_hat = self.act(x_hat)
+        x_hat = self.point_conv2(x_hat)
+        
         s =  self.sigmoid(x_hat)
 
         return torch.mul(x, s)
@@ -61,19 +82,21 @@ class FMBConvCA(nn.Module):
                 ):
         super().__init__()
         
-        self.conv = nn.Sequential(nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, groups=channels, bias=False),
-                                  nn.GELU(),
-                                  LocalContextAggregator(channels) if ca_local else GlobalContextAggregator(channels),
-                                  nn.Conv2d(channels, channels, kernel_size=1, stride=1, padding=0, bias=False),
-                                 )
-
-        self.norm1 = nn.InstanceNorm2d(channels, affine=True)
-        self.norm2 = nn.InstanceNorm2d(channels, affine=True)
+        self.dwconv = nn.Conv2d(channels, channels, kernel_size=3,  stride=1, padding=1, groups=channels, bias=False)
+#         self.dwconv = nn.Conv2d(channels, channels, kernel_size=7, padding=3, groups=channels, bias=False)
+        self.norm1 = nn.GroupNorm(4, channels)
+        self.act = nn.GELU()
+        self.ca = LocalContextAggregator(channels) if ca_local else GlobalContextAggregator(channels)
+        self.pwconv1 = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
+        self.norm2 = nn.GroupNorm(4, channels)
         
     def forward(self, x):
-        x = self.norm1(x)
-        x_hat = self.conv(x)
-        
+        x_hat = self.dwconv(x)
+        x_hat = self.norm1(x_hat)
+        x_hat = self.ca(x_hat)
+        x_hat = self.act(x_hat)
+        x_hat = self.pwconv1(x_hat)
+
         return self.norm2(x + x_hat)
 
 ## CA + BiFPN
