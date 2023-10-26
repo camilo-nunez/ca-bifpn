@@ -1,8 +1,0 @@
-BACKBONE:
-    MODEL_NAME: 'tf_efficientnetv2_l'
-    OUT_INDICES: [1, 2, 3, 4]
-NECK:
-    MODEL_NAME: 'cabifpn'
-    IN_CHANNELS: [64, 96, 224, 640]
-    NUM_CHANNELS: 256
-    NUM_LAYERS: 5

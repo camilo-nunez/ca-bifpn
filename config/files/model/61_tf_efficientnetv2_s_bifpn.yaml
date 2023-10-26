@@ -1,8 +1,0 @@
-BACKBONE:
-    MODEL_NAME: 'tf_efficientnetv2_s'
-    OUT_INDICES: [1, 2, 3, 4]
-NECK:
-    MODEL_NAME: 'bifpn'
-    IN_CHANNELS: [48, 64, 160, 256]
-    NUM_CHANNELS: 256
-    NUM_LAYERS: 5

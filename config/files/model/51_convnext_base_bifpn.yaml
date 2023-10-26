@@ -1,8 +1,0 @@
-BACKBONE:
-    MODEL_NAME: 'convnext_base'
-    OUT_INDICES: [0, 1, 2, 3]
-NECK:
-    MODEL_NAME: 'bifpn'
-    IN_CHANNELS: [128, 256, 512, 1024]
-    NUM_CHANNELS: 256
-    NUM_LAYERS: 5
