@@ -1,0 +1,4 @@
+NECK:
+    MODEL_NAME: 'bifpn'
+    NUM_CHANNELS: 256
+    NUM_LAYERS: 3
