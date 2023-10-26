@@ -16,12 +16,15 @@ from lion_pytorch import Lion
 
 from model.builder import BackboneNeck, AVAILABLE_NECKS, AVAILABLE_BACKBONES
 from config.init import create_train_config
-from utils.datasets import CocoDetectionV2
+from utils.datasets import CocoDetectionV2, LVISDetection
 
-AVAILABLE_DATASETS = ['coco2017']
+AVAILABLE_DATASETS = ['coco2017', 'lvisv1']
 
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 def parse_option():
     parser = argparse.ArgumentParser(
@@ -166,9 +169,14 @@ if __name__ == '__main__':
                        'num_workers': 4,
                        'pin_memory':True,
                       }
-
-    train_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/train2017'),
+    
+    if base_config.DATASET.NAME == 'coco2017':
+        train_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/train2017'),
                                         annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_train2017.json'),
+                                        transform = train_transform)
+    elif base_config.DATASET.NAME == 'lvisv1':
+        train_dataset = LVISDetection(root=os.path.join(base_config.DATASET.PATH,'lvisdataset/train2017'),
+                                        annFile=os.path.join(base_config.DATASET.PATH,'lvisdataset/lvis_v1_train.json'),
                                         transform = train_transform)
 
     training_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
