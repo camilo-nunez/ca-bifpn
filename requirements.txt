@@ -9,3 +9,4 @@ ujson
 grad-cam
 lion-pytorch
 torchmetrics
+lvis

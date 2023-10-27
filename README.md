@@ -31,5 +31,6 @@ python train_mask-rcnn.py --cfg_model_backbone config/files/model/backbone/00_in
 
 server universidad
 ```
-python train_B.py --cfg_model config/files/model/10_internimage_s_fpn.yaml --cfg_dataset config/files/dataset/coco.yaml --summary --dataset_path /chi2ad/thesis/datasets/ --checkpoint_path /chi2ad/thesis/checkpoint/ --batch_size 8
+python train_mask-rcnn.py --cfg_model_backbone config/files/model/backbone/21_efficientnetv2_m.yaml --cfg_model_neck config/files/model/neck/100_cabifpn_256_3.yaml --cfg_dataset config/files/dataset/lvis.yaml --summary --batch_size 4 --dataset_path /chi2ad/thesis/datase
+ts/ --checkpoint_path /chi2ad/thesis/checkpoint
 ```

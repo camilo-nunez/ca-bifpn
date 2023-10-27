@@ -280,7 +280,8 @@ if __name__ == '__main__':
                         'epoch': epoch,
                         'best_loss': best_loss,
                         'fn_cfg_dataset': str(args.cfg_dataset), 
-                        'fn_cfg_model': str(args.cfg_model),
+                        'fn_cfg_model_backbone': str(args.cfg_model_backbone),
+                        'fn_cfg_model_neck': str(args.cfg_model_neck),
                        },
                        os.path.join(args.checkpoint_path, f'{datetime.utcnow().strftime("%Y%m%d_%H%M")}_B_{base_config.MODEL.BACKBONE.MODEL_NAME}_{base_config.MODEL.NECK.MODEL_NAME}_{epoch}.pth'))
 
