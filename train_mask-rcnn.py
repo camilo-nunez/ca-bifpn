@@ -227,6 +227,8 @@ if __name__ == '__main__':
     # Train the model
     base_model.train()
     
+    scaler = torch.cuda.amp.GradScaler()
+    
     print('[+] Starting training ...')
     start_t = datetime.now()
     
@@ -240,22 +242,26 @@ if __name__ == '__main__':
                 
                 images = [image.to(device) for image in images]
                 targets = [{k: v.to(device) for k, v in t.items() if (k=='boxes' or k=='labels' or k=='masks')} for t in targets]
+
+                with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    loss_dict = base_model(images, targets)
+                    losses = sum(loss for loss in loss_dict.values())
                 
                 optimizer.zero_grad(set_to_none=True)
-                
-                loss_dict = base_model(images, targets)
-                losses = sum(loss for loss in loss_dict.values())
+                scaler.scale(losses).backward()
 
-                losses.backward()
-                optimizer.step()
+                torch.nn.utils.clip_grad_norm_(base_model.parameters(), 1.0)
+                scaler.step(optimizer)
+
+                scaler.update()
 
                 current_lr = optimizer.param_groups[0]['lr']
 
                 loss_l.append(losses.item())
                 loss_median = np.median(np.array(loss_l))
                 
-                description_s = 'Epoch: {}/{}. lr: {:1.5f} loss_classifier: {:1.5f} - loss_box_reg: {:1.5f} - loss_mask: {:1.5f}'\
-                                   ' - loss_objectness: {:1.5f} - loss_rpn_box_reg: {:1.5f}'\
+                description_s = 'Epoch: {}/{}. lr: {:1.3f} loss_classifier: {:1.3f} - loss_box_reg: {:1.3f} - loss_mask: {:1.3f}'\
+                                   ' - loss_objectness: {:1.3f} - loss_rpn_box_reg: {:1.3f}'\
                                    ' -  median loss: {:1.8f}'\
                                    .format(epoch,end_epoch,current_lr,*loss_dict.values(), loss_median)
 
