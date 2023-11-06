@@ -1,9 +1,32 @@
 import torch
 import torch.nn as nn
 
-from .utils import MaxPool2dStaticSamePadding, Conv2dStaticSamePadding
-
 from collections import OrderedDict
+
+class DownsampleInput(nn.Module):
+    
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 r = 2,
+                ):
+        super().__init__()
+        inter_channels = int(in_channels*r)
+        
+        self.pwconv1 = nn.Conv2d(in_channels, inter_channels, kernel_size=1, bias=False)
+        self.norm = nn.LayerNorm(inter_channels, eps=1e-6)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Conv2d(inter_channels, out_channels, kernel_size=1)
+        
+    def forward(self, x):
+        x = self.pwconv1(x)
+        x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+        x = self.norm(x)
+        x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+        x = self.act(x)
+        x = self.pwconv2(x)
+
+        return x
 
 class GRN(nn.Module):
     """ GRN (Global Response Normalization) layer
@@ -23,81 +46,98 @@ class LocalContextAggregator(nn.Module):
     
     def __init__(self,
                  channels,
-                 r = 4,
+                 r = 2,
+                 upsample = False,
+                 drop_path=0.,
                 ):
         super().__init__()
-        inter_channels = int(channels // r)
+        inter_channels = int(channels*r)
+        self.use_upsample = upsample
+
+        self.alpha = nn.Parameter(torch.zeros(1))
+    
+        if self.use_upsample:
+            self.upsample = nn.ConvTranspose2d(channels, channels, kernel_size=(2,2), stride=2, groups=channels)
+            self.normup = nn.LayerNorm(channels, eps=1e-6)
         
-        self.point_conv1 = nn.Conv2d(channels, inter_channels, kernel_size=1, bias=False)
-        self.norm = nn.GroupNorm(2, inter_channels)
+        self.norm = nn.LayerNorm(channels, eps=1e-6)
+        self.pwconv1 = nn.Conv2d(channels, inter_channels, kernel_size=1)
         self.act = nn.GELU()
-        self.point_conv2 = nn.Conv2d(inter_channels, channels, kernel_size=1, bias=False)
+        self.pwconv2 = nn.Conv2d(inter_channels, channels, kernel_size=1)
+        
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         
         self.sigmoid  = nn.Sigmoid()
         
     def forward(self, x):
-        x_hat = self.point_conv1(x)
-        x_hat = self.norm(x_hat)
-        x_hat = self.act(x_hat)
-        x_hat = self.point_conv2(x_hat)
         
+        if self.use_upsample:
+            x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+            x = self.normup(x)
+            x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+            x = self.upsample(x)
+        
+        x_hat = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+        x_hat = self.norm(x_hat)
+        x_hat = x_hat.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+        x_hat = self.pwconv1(x_hat)
+        x_hat = self.act(x_hat)
+        x_hat = self.pwconv2(x_hat)
+
         s =  self.sigmoid(x_hat)
 
-        return torch.mul(x, s)
+        return (1-self.alpha)*self.drop_path(torch.mul(x, s)) + self.alpha*x
 
 class GlobalContextAggregator(nn.Module):
     
     def __init__(self,
                  channels,
                  r = 4,
+                 downsample = False,
+                 drop_path=0.,
                 ):
         super().__init__()
-        inter_channels = int(channels // r)
+        inter_channels = int(channels*r)
+        self.use_downsample = downsample
+
+        self.alpha = nn.Parameter(torch.zeros(1))
         
-#         self.gap = nn.AvgPool2d(1)
-        self.gap = GRN(channels)
-        self.point_conv1 = nn.Conv2d(channels, inter_channels, kernel_size=1, bias=False)
-        self.norm = nn.GroupNorm(2, inter_channels)
+        if self.use_downsample:
+            self.downsample = nn.Conv2d(channels, channels, 3, stride=2, padding=1, groups=channels, bias=False)
+            self.normup = nn.LayerNorm(channels, eps=1e-6)
+        
+        self.dwconv = nn.Conv2d(channels, channels, kernel_size=3,  stride=1, padding=1, groups=channels, bias=False)
+        self.norm = nn.LayerNorm(channels, eps=1e-6)
+        
+        self.pwconv1 = nn.Conv2d(channels, inter_channels, kernel_size=1)
         self.act = nn.GELU()
-        self.point_conv2 = nn.Conv2d(inter_channels, channels, kernel_size=1, bias=False)
+        self.gc = GRN(inter_channels)
+        self.pwconv2 = nn.Conv2d(inter_channels, channels, kernel_size=1)
+
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.sigmoid  = nn.Sigmoid()
         
     def forward(self, x):
-        x_hat = self.gap(x)
-        x_hat = self.point_conv1(x_hat)
-        x_hat = self.norm(x_hat)
-        x_hat = self.act(x_hat)
-        x_hat = self.point_conv2(x_hat)
         
+        if self.use_downsample:
+            x = self.downsample(x)
+            x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+            x = self.normup(x)
+            x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+        
+        x_hat = self.dwconv(x)
+        x_hat = x_hat.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+        x_hat = self.norm(x_hat)
+        x_hat = x_hat.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+        x_hat = self.pwconv1(x_hat)
+        x_hat = self.act(x_hat)
+        x_hat = self.gc(x_hat)
+        x_hat = self.pwconv2(x_hat)
+
         s =  self.sigmoid(x_hat)
 
-        return torch.mul(x, s)
-
-## Fused-MBConv with Context Agregators
-class FMBConvCA(nn.Module):
-    def __init__(self,
-                 channels,
-                 ca_local = True,
-                ):
-        super().__init__()
-        
-        self.dwconv = nn.Conv2d(channels, channels, kernel_size=3,  stride=1, padding=1, groups=channels, bias=False)
-#         self.dwconv = nn.Conv2d(channels, channels, kernel_size=7, padding=3, groups=channels, bias=False)
-        self.norm1 = nn.GroupNorm(4, channels)
-        self.act = nn.GELU()
-        self.ca = LocalContextAggregator(channels) if ca_local else GlobalContextAggregator(channels)
-        self.pwconv1 = nn.Conv2d(channels, channels, kernel_size=1, bias=False)
-        self.norm2 = nn.GroupNorm(4, channels)
-        
-    def forward(self, x):
-        x_hat = self.dwconv(x)
-        x_hat = self.norm1(x_hat)
-        x_hat = self.ca(x_hat)
-        x_hat = self.act(x_hat)
-        x_hat = self.pwconv1(x_hat)
-
-        return self.norm2(x + x_hat)
+        return (1-self.alpha)*self.drop_path(torch.mul(x, s)) + self.alpha*x
 
 ## CA + BiFPN
 class CABiFPN(nn.Module):
@@ -108,69 +148,41 @@ class CABiFPN(nn.Module):
                  first_time=False):
         
         super().__init__()
-        
-        
+
         # Convs blocks
         ## Inner Nodes
         ### P31
-        self.p31_gca_p30 = FMBConvCA(channels, ca_local=False)
-        self.p31_lca_p40 = FMBConvCA(channels)
+        self.p31_gca_p30 = GlobalContextAggregator(channels)
+        self.p31_lca_p40 = LocalContextAggregator(channels, upsample = True)
         ### P21
-        self.p21_gca_p20 = FMBConvCA(channels, ca_local=False)
-        self.p21_lca_p31 = FMBConvCA(channels)
+        self.p21_gca_p20 = GlobalContextAggregator(channels)
+        self.p21_lca_p31 = LocalContextAggregator(channels, upsample = True)
         
         ## Outer Nodes
         ### P12
-        self.p12_gca_p10 = FMBConvCA(channels, ca_local=False)
-        self.p12_lca_p21 = FMBConvCA(channels)
+        self.p12_gca_p10 = GlobalContextAggregator(channels)
+        self.p12_lca_p21 = LocalContextAggregator(channels, upsample = True)
         
         ### P22
-        self.p22_lca_p20 = FMBConvCA(channels)
-        self.p22_lca_P21 = FMBConvCA(channels)
-        self.p22_gca_p12 = FMBConvCA(channels, ca_local = False)
+        self.p22_lca_p20 = LocalContextAggregator(channels)
+        self.p22_lca_P21 = LocalContextAggregator(channels)
+        self.p22_gca_p12 = GlobalContextAggregator(channels, downsample=True)
         
         ### P32
-        self.p32_lca_p30 = FMBConvCA(channels)
-        self.p32_lca_P31 = FMBConvCA(channels)
-        self.p32_gca_p22 = FMBConvCA(channels, ca_local=False)
+        self.p32_lca_p30 = LocalContextAggregator(channels)
+        self.p32_lca_P31 = LocalContextAggregator(channels)
+        self.p32_gca_p22 = GlobalContextAggregator(channels, downsample=True)
         
         ### P42
-        self.p42_lca_p40 = FMBConvCA(channels)
-        self.p42_gca_p32 = FMBConvCA(channels, ca_local=False)
-        
-
-        # Feature scaling layers
-        self.p3_upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.p2_upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.p1_upsample = nn.Upsample(scale_factor=2, mode='nearest')
-
-        self.p2_downsample = MaxPool2dStaticSamePadding(3, 2)
-        self.p3_downsample = MaxPool2dStaticSamePadding(3, 2)
-        self.p4_downsample = MaxPool2dStaticSamePadding(3, 2)
+        self.p42_lca_p40 = LocalContextAggregator(channels)
+        self.p42_gca_p32 = GlobalContextAggregator(channels, downsample=True)
 
         self.first_time = first_time
         if self.first_time:
-            self.p4_down_channel = nn.Sequential(
-                Conv2dStaticSamePadding(conv_channels[3], channels, 1, bias=False),
-#                 nn.BatchNorm2d(channels, momentum=0.01, eps=1e-3),
-                nn.InstanceNorm2d(channels, affine=True),
-            )
-            self.p3_down_channel = nn.Sequential(
-                Conv2dStaticSamePadding(conv_channels[2], channels, 1, bias=False),
-#                 nn.BatchNorm2d(channels, momentum=0.01, eps=1e-3),
-                nn.InstanceNorm2d(channels, affine=True),
-            )
-            self.p2_down_channel = nn.Sequential(
-                Conv2dStaticSamePadding(conv_channels[1], channels, 1, bias=False),
-#                 nn.BatchNorm2d(channels, momentum=0.01, eps=1e-3),
-                nn.InstanceNorm2d(channels, affine=True),
-            )
-            self.p1_down_channel = nn.Sequential(
-                Conv2dStaticSamePadding(conv_channels[0], channels, 1, bias=False),
-#                 nn.BatchNorm2d(channels, momentum=0.01, eps=1e-3),
-                nn.InstanceNorm2d(channels, affine=True),
-            )
-
+            self.p4_down_channel = DownsampleInput(in_channels=conv_channels[3] , out_channels=channels)
+            self.p3_down_channel = DownsampleInput(in_channels=conv_channels[2] , out_channels=channels)
+            self.p2_down_channel = DownsampleInput(in_channels=conv_channels[1] , out_channels=channels)
+            self.p1_down_channel = DownsampleInput(in_channels=conv_channels[0] , out_channels=channels)
 
     def forward(self, inputs):
         """
@@ -203,13 +215,13 @@ class CABiFPN(nn.Module):
 
         ## Nodes
         ### Inner Nodes
-        p3_1 = self.p31_gca_p30(p3_0) + self.p31_lca_p40(self.p3_upsample(p4_0))
-        p2_1 = self.p21_gca_p20(p2_0) + self.p21_lca_p31(self.p2_upsample(p3_1))
+        p3_1 = self.p31_gca_p30(p3_0) + self.p31_lca_p40(p4_0)
+        p2_1 = self.p21_gca_p20(p2_0) + self.p21_lca_p31(p3_1)
         
         ### Outer Nodes
-        p1_2 = self.p12_gca_p10(p1_0) + self.p12_lca_p21(self.p1_upsample(p2_1))
-        p2_2 = self.p22_lca_p20(p2_0) + self.p22_lca_P21(p2_1) + self.p22_gca_p12(self.p2_downsample(p1_2))
-        p3_2 = self.p32_lca_p30(p3_0) + self.p32_lca_P31(p3_1) + self.p32_gca_p22(self.p3_downsample(p2_2))
-        p4_2 = self.p42_lca_p40(p4_0) + self.p42_gca_p32(self.p4_downsample(p3_2))
+        p1_2 = self.p12_gca_p10(p1_0) + self.p12_lca_p21(p2_1)
+        p2_2 = self.p22_lca_p20(p2_0) + self.p22_lca_P21(p2_1) + self.p22_gca_p12(p1_2)
+        p3_2 = self.p32_lca_p30(p3_0) + self.p32_lca_P31(p3_1) + self.p32_gca_p22(p2_2)
+        p4_2 = self.p42_lca_p40(p4_0) + self.p42_gca_p32(p3_2)
 
         return p1_2, p2_2, p3_2, p4_2
