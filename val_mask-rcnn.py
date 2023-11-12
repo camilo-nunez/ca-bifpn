@@ -16,14 +16,15 @@ from albumentations.pytorch import ToTensorV2
 
 from model.builder import BackboneNeck
 from config.init import create_val_config
-from utils.datasets import CocoDetectionV2
-# from utils.vision.engine import evaluate
+from utils.datasets import CocoDetectionV2, LVISDetection
 
-AVAILABLE_DATASETS = ['coco2017']
+AVAILABLE_DATASETS = ['coco2017', 'lvisv1']
 
 ## Customs configs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 def parse_option():
     parser = argparse.ArgumentParser(
@@ -129,10 +130,21 @@ if __name__ == '__main__':
                    'pin_memory':True,
                   }
     
-    val_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/val2017'),
+#     val_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/val2017'),
+#                                   annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_val2017.json'),
+#                                   transform = val_transform
+#                                  )
+
+    if base_config.DATASET.NAME == 'coco2017':
+        val_dataset = CocoDetectionV2(root=os.path.join(base_config.DATASET.PATH,'coco2017/val2017'),
                                   annFile=os.path.join(base_config.DATASET.PATH,'coco2017/annotations/instances_val2017.json'),
                                   transform = val_transform
                                  )
+    elif base_config.DATASET.NAME == 'lvisv1':
+        val_dataset = LVISDetection(root=os.path.join(base_config.DATASET.PATH,'lvisdataset/val2017'),
+                                        annFile=os.path.join(base_config.DATASET.PATH,'lvisdataset/lvis_v1_val.json'),
+                                        transform = val_transform)
+
 
     val_loader = torch.utils.data.DataLoader(val_dataset, **val_params)
     print('[++] Ready !')
