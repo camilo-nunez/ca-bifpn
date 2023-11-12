@@ -1,9 +1,9 @@
-albumentations==1.3.0
-omegaconf==2.3.0
-opencv==4.6.0
-Pillow==9.5.0
+albumentations
+omegaconf
+opencv
+Pillow
 pycocotools
-timm==0.6.13
+timm
 torchinfo
 ujson
 grad-cam

@@ -41,9 +41,6 @@ class ENVTRAIN:
 class ENVTRAIN:
     NUM_EPOCHS: int = MISSING
     BATCH_SIZE: int = MISSING
-    CHECKPOINT_PATH: str = MISSING
-    CHECKPOINT_USE: bool = MISSING
-    CHECKPOINT_FN: str = MISSING
 
 @dataclass
 class OPTIM:
@@ -96,14 +93,6 @@ def create_train_config(args):
         base_config.TRAIN.ENV.NUM_EPOCHS = args.num_epochs
     if hasattr(args, 'batch_size') and args.batch_size:
         base_config.TRAIN.ENV.BATCH_SIZE = args.batch_size
-        
-    if hasattr(args, 'checkpoint_path') and args.checkpoint_path:
-        base_config.TRAIN.ENV.CHECKPOINT_PATH = args.checkpoint_path
-    if hasattr(args, 'use_checkpoint') and args.use_checkpoint:
-        base_config.TRAIN.ENV.CHECKPOINT_USE = args.use_checkpoint
-        if hasattr(args, 'checkpoint_fn') and args.checkpoint_fn:
-            base_config.TRAIN.ENV.CHECKPOINT_FN = args.checkpoint_fn
-        else: raise RuntimeError('You must specify the \'--checkpoint_fn\'. ')
         
     if hasattr(args, 'lr') and args.lr:
         base_config.TRAIN.OPTIM.BASE_LR = args.lr

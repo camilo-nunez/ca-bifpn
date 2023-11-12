@@ -43,7 +43,6 @@ def parse_option():
                         help='Path to NECK config file. Must be a YAML file.'
                        )
     
-    
     parser.add_argument('--cfg_dataset',
                         type=str,
                         required=True,
@@ -63,17 +62,15 @@ def parse_option():
                         type=int,
                         default=2)
 
-    parser.add_argument('--use_checkpoint',
-                        action='store_true',
-                        help="Load a checkpoint.")
-    parser.add_argument('--checkpoint_path',
-                        type=str,
-                        default='/thesis/checkpoint', 
-                        help='Path to complete DATASET.')
-    parser.add_argument('--checkpoint_fn',
+    parser.add_argument('--checkpoint',
                         type=str,
                         metavar="FILE",
+                        default = None,
                         help="Checkpoint filename.")
+    
+    parser.add_argument('--scheduler',
+                        action='store_true',
+                        help="Use scheduler")
     
     parser.add_argument('--lr', 
                         type=float, 
@@ -94,6 +91,11 @@ def parse_option():
     parser.add_argument('--summary',
                         action='store_true',
                         help="Display the summary of the model.")
+    
+    parser.add_argument('--amp',
+                        action='store_true',
+                        help="Enable Automatic Mixed Precision train.")
+    
         
     args, unparsed = parser.parse_known_args()
     config = create_train_config(args)
@@ -210,58 +212,69 @@ if __name__ == '__main__':
     best_loss = 1e5
     global_steps = 0
 
-#     print(base_config.TRAIN.ENV)
-#     ## Load the checkpoint if is need it
-#     if base_config.TRAIN.ENV.CHECKPOINT_USE:
-#         print('[+] Loading checkpoint...')
-#         checkpoint = torch.load(os.path.join(base_config.TRAIN.ENV.CHECKPOINT_PATH,
-#                                              base_config.TRAIN.ENV.CHECKPOINT_FN))
+    ## Scheduler
+    if args.scheduler:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min= 5e-3)
+    
+    ## Prepare Automatic Mixed Precision
+    if args.amp:
+        print("[+] Using Automatic Mixed Precision")
+        use_amp = True
+    else:
+        use_amp = False
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
         
-#         base_model.load_state_dict(checkpoint['model_state_dict'])
-#         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    ## Load the checkpoint if is need it
+    if args.checkpoint:
+        print('[+] Loading checkpoint...')
+        checkpoint = torch.load(os.path.join(args.checkpoint))
+        
+        base_model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-#         best_loss = checkpoint['best_loss']
-#         start_epoch = checkpoint['epoch'] + 1
-#         print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
+        best_loss = checkpoint['best_loss']
+        start_epoch = checkpoint['epoch'] + 1
+        print(f'[+] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
 
     # Train the model
     base_model.train()
     
-    scaler = torch.cuda.amp.GradScaler()
+
     
     print('[+] Starting training ...')
     start_t = datetime.now()
     
-    for epoch in range(start_epoch, end_epoch + 1):
+    for e, epoch in enumerate(range(start_epoch, end_epoch + 1)):
         loss_l = []
         with tqdm(training_loader, unit=" batch") as tepoch:
-            for images, targets in tepoch:
+            for i, data in enumerate(tepoch):
                 
+                images, targets = data
+
                 if None in images and None in targets: continue
                 if not all(('boxes' in d.keys() and 'labels' in d.keys() and 'masks' in d.keys()) for d in targets): continue
                 
                 images = [image.to(device) for image in images]
                 targets = [{k: v.to(device) for k, v in t.items() if (k=='boxes' or k=='labels' or k=='masks')} for t in targets]
 
-                with torch.autocast(device_type='cuda', dtype=torch.float16):
+                with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
                     loss_dict = base_model(images, targets)
                     losses = sum(loss for loss in loss_dict.values())
-                
-                optimizer.zero_grad(set_to_none=True)
-                scaler.scale(losses).backward()
 
+                scaler.scale(losses).backward()
                 torch.nn.utils.clip_grad_norm_(base_model.parameters(), 1.0)
                 scaler.step(optimizer)
-
                 scaler.update()
+                
+                optimizer.zero_grad(set_to_none=True)
 
                 current_lr = optimizer.param_groups[0]['lr']
 
                 loss_l.append(losses.item())
                 loss_median = np.median(np.array(loss_l))
                 
-                description_s = 'Epoch: {}/{}. lr: {:1.3f} loss_classifier: {:1.3f} - loss_box_reg: {:1.3f} - loss_mask: {:1.3f}'\
-                                   ' - loss_objectness: {:1.3f} - loss_rpn_box_reg: {:1.3f}'\
+                description_s = 'Epoch: {}/{}. lr: {:1.8f} loss_classifier: {:1.4f} - loss_box_reg: {:1.4f} - loss_mask: {:1.4f}'\
+                                   ' - loss_objectness: {:1.4f} - loss_rpn_box_reg: {:1.4f}'\
                                    ' -  median loss: {:1.8f}'\
                                    .format(epoch,end_epoch,current_lr,*loss_dict.values(), loss_median)
 
@@ -277,12 +290,17 @@ if __name__ == '__main__':
                 
                 global_steps+=1
 
+                if args.scheduler:
+                    scheduler.step(e + i/len(tepoch))
+
         if loss_median < best_loss:
             best_loss = loss_median
 
             torch.save({'model_state_dict': base_model.state_dict(),
                         'neck_state_dict': base_model.backbone.neck.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict() if args.amp else None,
+                        'scheduler_state_dict':scheduler.state_dict() if args.scheduler else None,
+                        'scaler_state_dict': scaler.state_dict(),
                         'epoch': epoch,
                         'best_loss': best_loss,
                         'fn_cfg_dataset': str(args.cfg_dataset), 
