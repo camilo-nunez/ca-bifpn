@@ -67,6 +67,11 @@ def parse_option():
                         metavar="FILE",
                         default = None,
                         help="Checkpoint filename.")
+    parser.add_argument('--checkpoint_path',
+                        type=str,
+                        default='/thesis/checkpoint', 
+                        help='Path to complete DATASET.')
+    
     
     parser.add_argument('--scheduler',
                         action='store_true',
