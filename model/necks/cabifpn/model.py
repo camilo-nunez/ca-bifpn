@@ -184,6 +184,8 @@ class CABiFPN(nn.Module):
             self.p2_down_channel = DownsampleInput(in_channels=conv_channels[1] , out_channels=channels)
             self.p1_down_channel = DownsampleInput(in_channels=conv_channels[0] , out_channels=channels)
 
+        self.proj_p4_2 = nn.Identity()
+
     def forward(self, inputs):
         """
         illustration of a minimal CABiFPN unit
@@ -223,5 +225,7 @@ class CABiFPN(nn.Module):
         p2_2 = self.p22_lca_p20(p2_0) + self.p22_lca_P21(p2_1) + self.p22_gca_p12(p1_2)
         p3_2 = self.p32_lca_p30(p3_0) + self.p32_lca_P31(p3_1) + self.p32_gca_p22(p2_2)
         p4_2 = self.p42_lca_p40(p4_0) + self.p42_gca_p32(p3_2)
+        
+        self.proj_p4_2(p4_2)
 
         return p1_2, p2_2, p3_2, p4_2

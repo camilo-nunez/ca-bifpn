@@ -24,12 +24,10 @@ class Neck(nn.Module):
         
         self.neck = None
         
-        if model_name == 'bifpn': 
-            self.neck = nn.Sequential(*[BiFPN(num_channels, in_channels, first_time=True if _ == 0 else False) 
-                                        for _ in range(num_layers)])
+        if model_name == 'bifpn':
+            self.neck = nn.Sequential(OrderedDict([(f"neck_layer_{i}", BiFPN(num_channels, in_channels, first_time=True if i == 0 else False)) for i in range(num_layers)]))
         elif model_name == 'cabifpn':
-            self.neck = nn.Sequential(*[CABiFPN(num_channels, in_channels, first_time=True if _ == 0 else False) 
-                                        for _ in range(num_layers)])
+            self.neck = nn.Sequential(OrderedDict([(f"neck_layer_{i}", CABiFPN(num_channels, in_channels, first_time=True if i == 0 else False)) for i in range(num_layers)]))
         elif model_name == 'fpn':
             self.neck = nn.Sequential(*[FeaturePyramidNetwork(in_channels if _ == 0 else mid_channels, num_channels)
                                         for _ in range(num_layers)])
