@@ -14,9 +14,9 @@ DIRNAME = os.path.dirname(__file__)
 TIMM_AVAILABLE_MODELS = ['convnext_tiny',
                          'convnext_small',
                          'convnext_base',
-                         'efficientnetv2_s',
-                         'efficientnetv2_m',
-                         'efficientnetv2_l',
+                         'tf_efficientnetv2_s',
+                         'tf_efficientnetv2_m',
+                         'tf_efficientnetv2_l',
                         ]
 
 INTERNIMAGE_AVAILABLE_MODELS = {'internimage_t':'./internimage/configs/00_internimage_t_1k_224.yaml',
