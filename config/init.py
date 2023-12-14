@@ -135,7 +135,7 @@ def create_val_config(args):
         
     return l_bc, l_ch
 
-def create_ntbk_config(checkpoint_path: str):
+def _create_config(checkpoint_path: str):
     
     import torch
     
@@ -145,11 +145,13 @@ def create_ntbk_config(checkpoint_path: str):
     
     print('[+] Preparing base configs...')
 
-    model_conf = OmegaConf.load(os.path.join(DIRNAME, 'files/model/', os.path.basename(checkpoint['fn_cfg_model'])))
-    dataset_conf = OmegaConf.load(os.path.join(DIRNAME, 'files/dataset/', os.path.basename(checkpoint['fn_cfg_dataset'])))
-    
+    model_backbone_conf = OmegaConf.load(checkpoint['fn_cfg_model_backbone'])
+    model_neck_conf = OmegaConf.load(checkpoint['fn_cfg_model_neck'])
+
+    dataset_conf = OmegaConf.load(checkpoint['fn_cfg_dataset'])
+
     base_config = default_config()
-    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_conf)
+    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf)
     base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
 
     print('[+] Ready !')
