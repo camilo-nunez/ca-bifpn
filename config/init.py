@@ -134,26 +134,3 @@ def create_val_config(args):
         l_bc.append(base_config)
         
     return l_bc, l_ch
-
-def _create_config(checkpoint_path: str):
-    
-    import torch
-    
-    print('[+] Loading checkpoint...')
-    checkpoint = torch.load(os.path.join(checkpoint_path))
-    print('[+] Ready !')
-    
-    print('[+] Preparing base configs...')
-
-    model_backbone_conf = OmegaConf.load(checkpoint['fn_cfg_model_backbone'])
-    model_neck_conf = OmegaConf.load(checkpoint['fn_cfg_model_neck'])
-
-    dataset_conf = OmegaConf.load(checkpoint['fn_cfg_dataset'])
-
-    base_config = default_config()
-    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf)
-    base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
-
-    print('[+] Ready !')
-    
-    return base_config, checkpoint
