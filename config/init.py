@@ -105,29 +105,35 @@ def create_val_config(args):
     
     import torch
     
-    print('[+] Loading checkpoint...')
-    checkpoint = torch.load(os.path.join(args.path_checkpoint))
-    print('[+] Ready !')
+    l_ch = []
+    l_bc = []
     
-    print('[+] Preparing base configs...')
+    for i, path_ch in enumerate(args.path_checkpoint):
+        print(f'[+] Loading checkpoint {i}...')
+        checkpoint = torch.load(os.path.join(path_ch))
+        print('[+] Ready !')
 
-    model_backbone_conf = OmegaConf.load(checkpoint['fn_cfg_model_backbone'])
-    model_neck_conf = OmegaConf.load(checkpoint['fn_cfg_model_neck'])
-    
-    dataset_conf = OmegaConf.load(checkpoint['fn_cfg_dataset'])
-    
-    base_config = default_config()
-    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf)
-    base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
-    
-    if hasattr(args, 'batch_size') and args.batch_size:
-        base_config.TRAIN.ENV.BATCH_SIZE = args.batch_size
-    if hasattr(args, 'dataset_path') and args.dataset_path:
-        base_config.DATASET.PATH = args.dataset_path
-    
-    print('[+] Ready !')
-    
-    return base_config, checkpoint
+        print(f'[+] Preparing base configs {i}...')
+        model_backbone_conf = OmegaConf.load(checkpoint['fn_cfg_model_backbone'])
+        model_neck_conf = OmegaConf.load(checkpoint['fn_cfg_model_neck'])
+
+        dataset_conf = OmegaConf.load(checkpoint['fn_cfg_dataset'])
+
+        base_config = default_config()
+        base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf)
+        base_config.DATASET = OmegaConf.merge(base_config.DATASET, dataset_conf)
+
+        if hasattr(args, 'batch_size') and args.batch_size:
+            base_config.TRAIN.ENV.BATCH_SIZE = args.batch_size
+        if hasattr(args, 'dataset_path') and args.dataset_path:
+            base_config.DATASET.PATH = args.dataset_path
+
+        print('[+] Ready !')
+        
+        l_ch.append(checkpoint)
+        l_bc.append(base_config)
+        
+    return l_bc, l_ch
 
 def create_ntbk_config(checkpoint_path: str):
     
